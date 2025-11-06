@@ -78,7 +78,7 @@ O que foi feito desde a última atualização:
 - Protótipo - Design no Figma
 
 ## 📞 Contacto
-- Email: [teu.email@escola.com]
-- GitHub: [@teuusername]
+- Email: a9953@agrcanelas.com
+- GitHub: skzy07
 
 
