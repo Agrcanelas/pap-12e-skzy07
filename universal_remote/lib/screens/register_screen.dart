@@ -1,36 +1,41 @@
 import 'package:flutter/material.dart';
-import 'home_screen.dart';
-import 'register_screen.dart';
 import '../services/auth_service.dart';
+import 'home_screen.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({Key? key}) : super(key: key);
+class RegisterScreen extends StatefulWidget {
+  const RegisterScreen({Key? key}) : super(key: key);
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _nomeController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   final _authService = AuthService();
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
 
   @override
   void dispose() {
+    _nomeController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
-  Future<void> _login() async {
+  Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
-    final result = await _authService.login(
+    final result = await _authService.register(
+      nome: _nomeController.text.trim(),
       email: _emailController.text.trim(),
       senha: _passwordController.text,
     );
@@ -39,13 +44,30 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (mounted) {
       if (result['success'] == true) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Conta criada com sucesso!'),
+            backgroundColor: Colors.green,
+          ),
         );
+        
+        // Faz login automático após registo
+        final loginResult = await _authService.login(
+          email: _emailController.text.trim(),
+          senha: _passwordController.text,
+        );
+        
+        if (loginResult['success'] == true && mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+          );
+        } else {
+          Navigator.of(context).pop();
+        }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(result['message'] ?? 'Erro ao fazer login'),
+            content: Text(result['message'] ?? 'Erro ao criar conta'),
             backgroundColor: Colors.red,
           ),
         );
@@ -56,6 +78,10 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Criar Conta'),
+        centerTitle: true,
+      ),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -66,16 +92,34 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
-                    Icons.tv,
+                    Icons.person_add,
                     size: 80,
                     color: Theme.of(context).colorScheme.primary,
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    'Universal Remote',
+                    'Registo',
                     style: Theme.of(context).textTheme.headlineMedium,
                   ),
                   const SizedBox(height: 48),
+                  TextFormField(
+                    controller: _nomeController,
+                    decoration: const InputDecoration(
+                      labelText: 'Nome',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.person),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Por favor insira o nome';
+                      }
+                      if (value.length < 3) {
+                        return 'Nome deve ter pelo menos 3 caracteres';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
                   TextFormField(
                     controller: _emailController,
                     decoration: const InputDecoration(
@@ -115,6 +159,37 @@ class _LoginScreenState extends State<LoginScreen> {
                       if (value == null || value.isEmpty) {
                         return 'Por favor insira a password';
                       }
+                      if (value.length < 6) {
+                        return 'Password deve ter pelo menos 6 caracteres';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _confirmPasswordController,
+                    decoration: InputDecoration(
+                      labelText: 'Confirmar Password',
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(
+                        icon: Icon(_obscureConfirmPassword
+                            ? Icons.visibility
+                            : Icons.visibility_off),
+                        onPressed: () {
+                          setState(() => _obscureConfirmPassword =
+                              !_obscureConfirmPassword);
+                        },
+                      ),
+                    ),
+                    obscureText: _obscureConfirmPassword,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Por favor confirme a password';
+                      }
+                      if (value != _passwordController.text) {
+                        return 'As passwords não coincidem';
+                      }
                       return null;
                     },
                   ),
@@ -123,25 +198,22 @@ class _LoginScreenState extends State<LoginScreen> {
                     width: double.infinity,
                     height: 50,
                     child: ElevatedButton(
-                      onPressed: _isLoading ? null : _login,
+                      onPressed: _isLoading ? null : _register,
                       child: _isLoading
                           ? const SizedBox(
                               height: 20,
                               width: 20,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Text('Entrar'),
+                          : const Text('Criar Conta'),
                     ),
                   ),
                   const SizedBox(height: 16),
                   TextButton(
                     onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                            builder: (_) => const RegisterScreen()),
-                      );
+                      Navigator.of(context).pop();
                     },
-                    child: const Text('Não tem conta? Registe-se'),
+                    child: const Text('Já tem conta? Faça login'),
                   ),
                 ],
               ),

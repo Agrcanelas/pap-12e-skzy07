@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart';
 import '../services/theme_service.dart';
-// ignore: unused_import
-import '../services/language_service.dart';
 import 'login_screen.dart';
 
 class SettingsTab extends StatefulWidget {
