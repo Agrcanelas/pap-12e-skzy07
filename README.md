@@ -45,11 +45,12 @@ Desenvolver um sistema de controlo remoto para televisores através de uma aplic
 
 ### ✅ Concluídas
 - Frontend
+- Base de Dados
+- Sistema de Login
 
 ### 🔄 Em Desenvolvimento
 - Backend
-- Base de dados
-- Sistema de login
+- Linguagem da APP
 
 ### 📅 Planeadas
 - Implementação do servidor na Raspberry
