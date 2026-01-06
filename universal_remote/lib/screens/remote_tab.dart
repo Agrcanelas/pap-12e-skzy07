@@ -7,7 +7,6 @@ class RemoteTab extends StatelessWidget {
       {VoidCallback? onPressed}) {
     return ElevatedButton(
       onPressed: onPressed ?? () {
-        // TODO: Implementar lógica do controle IR
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('$label pressionado')),
         );
@@ -33,12 +32,10 @@ class RemoteTab extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              // Power button
               _buildButton(context, Icons.power_settings_new, 'Power'),
               
               const SizedBox(height: 20),
               
-              // Navigation buttons
               Column(
                 children: [
                   _buildButton(context, Icons.keyboard_arrow_up, 'Cima'),
@@ -58,7 +55,6 @@ class RemoteTab extends StatelessWidget {
               
               const SizedBox(height: 20),
               
-              // Volume and channel controls
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
@@ -81,7 +77,6 @@ class RemoteTab extends StatelessWidget {
               
               const SizedBox(height: 20),
               
-              // Additional controls
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
