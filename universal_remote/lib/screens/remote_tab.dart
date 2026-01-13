@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/history_service.dart';
+import '../services/raspberry_service.dart';
 
 class RemoteTab extends StatefulWidget {
   const RemoteTab({Key? key}) : super(key: key);
@@ -11,18 +12,44 @@ class RemoteTab extends StatefulWidget {
 
 class _RemoteTabState extends State<RemoteTab> {
   final HistoryService _historyService = HistoryService();
+  final RaspberryService _raspberryService = RaspberryService();
   String _displayNumber = '';
   int? _userId;
+  bool _isConnected = false;
+  bool _isCheckingConnection = true;
 
   @override
   void initState() {
     super.initState();
     _loadUserId();
+    _checkRaspberryConnection();
   }
 
   Future<void> _loadUserId() async {
     final prefs = await SharedPreferences.getInstance();
     _userId = prefs.getInt('userId');
+  }
+
+  Future<void> _checkRaspberryConnection() async {
+    setState(() => _isCheckingConnection = true);
+    
+    final status = await _raspberryService.checkStatus();
+    
+    if (mounted) {
+      setState(() {
+        _isConnected = status['status'] == 'online';
+        _isCheckingConnection = false;
+      });
+
+      if (!_isConnected) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ Raspberry Pi desconectado'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    }
   }
 
   void _onNumberPressed(String number) {
@@ -44,27 +71,69 @@ class _RemoteTabState extends State<RemoteTab> {
 
     final channelNumber = int.parse(_displayNumber);
     
-    await _historyService.addHistory(
-      userId: _userId!,
-      channelNumber: channelNumber,
-      channelName: 'Canal $channelNumber',
-      channelLogo: '📺',
-    );
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Mudando para canal $_displayNumber')),
+    // Envia para o Raspberry Pi
+    final result = await _raspberryService.sendNumber(_displayNumber);
+    
+    if (result['success'] == true) {
+      // Adiciona ao histórico
+      await _historyService.addHistory(
+        userId: _userId!,
+        channelNumber: channelNumber,
+        channelName: 'Canal $channelNumber',
+        channelLogo: '📺',
       );
-      _clearDisplay();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('✓ Canal $_displayNumber')),
+        );
+        _clearDisplay();
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message'] ?? 'Erro ao enviar'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
-  Widget _buildButton(dynamic content, {VoidCallback? onPressed, bool isNumber = false}) {
+  Future<void> _sendCommand(String command, String label) async {
+    final result = await _raspberryService.sendCommand(command);
+    
+    if (mounted) {
+      if (result['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('✓ $label')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message'] ?? 'Erro'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildButton(dynamic content, String command, String label, {bool isNumber = false}) {
     return SizedBox(
       width: 60,
       height: 60,
       child: ElevatedButton(
-        onPressed: onPressed,
+        onPressed: _isConnected
+            ? () {
+                if (isNumber) {
+                  _onNumberPressed(content.toString());
+                } else {
+                  _sendCommand(command, label);
+                }
+              }
+            : null,
         style: ElevatedButton.styleFrom(
           shape: const CircleBorder(),
           padding: EdgeInsets.zero,
@@ -89,6 +158,29 @@ class _RemoteTabState extends State<RemoteTab> {
       appBar: AppBar(
         title: const Text('Comando Universal'),
         centerTitle: true,
+        actions: [
+          if (_isCheckingConnection)
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Icon(
+                _isConnected ? Icons.wifi : Icons.wifi_off,
+                color: _isConnected ? Colors.green : Colors.red,
+              ),
+            ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _checkRaspberryConnection,
+          ),
+        ],
       ),
       body: SafeArea(
         child: LayoutBuilder(
@@ -101,6 +193,31 @@ class _RemoteTabState extends State<RemoteTab> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
+                      // Status
+                      if (!_isConnected && !_isCheckingConnection)
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade100,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.warning, color: Colors.orange),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Raspberry Pi desconectado. Verifique a conexão.',
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      
+                      if (!_isConnected && !_isCheckingConnection)
+                        const SizedBox(height: 8),
+                      
                       // Display
                       Container(
                         width: double.infinity,
@@ -125,7 +242,7 @@ class _RemoteTabState extends State<RemoteTab> {
                                     color: Colors.green,
                                     padding: EdgeInsets.zero,
                                     constraints: const BoxConstraints(),
-                                    onPressed: _confirmChannel,
+                                    onPressed: _isConnected ? _confirmChannel : null,
                                   ),
                                   const SizedBox(width: 8),
                                   IconButton(
@@ -142,58 +259,52 @@ class _RemoteTabState extends State<RemoteTab> {
                       
                       const SizedBox(height: 8),
                       
-                      // Power + Teclado numérico
+                      // Power + Números
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
-                          // Power
                           Column(
                             children: [
-                              _buildButton(Icons.power_settings_new, onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Power pressionado')),
-                                );
-                              }),
+                              _buildButton(Icons.power_settings_new, 'power', 'Power'),
                             ],
                           ),
                           
-                          // Números 1-9, 0
                           Column(
                             children: [
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  _buildButton('1', onPressed: () => _onNumberPressed('1'), isNumber: true),
+                                  _buildButton('1', '', '1', isNumber: true),
                                   const SizedBox(width: 8),
-                                  _buildButton('2', onPressed: () => _onNumberPressed('2'), isNumber: true),
+                                  _buildButton('2', '', '2', isNumber: true),
                                   const SizedBox(width: 8),
-                                  _buildButton('3', onPressed: () => _onNumberPressed('3'), isNumber: true),
+                                  _buildButton('3', '', '3', isNumber: true),
                                 ],
                               ),
                               const SizedBox(height: 8),
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  _buildButton('4', onPressed: () => _onNumberPressed('4'), isNumber: true),
+                                  _buildButton('4', '', '4', isNumber: true),
                                   const SizedBox(width: 8),
-                                  _buildButton('5', onPressed: () => _onNumberPressed('5'), isNumber: true),
+                                  _buildButton('5', '', '5', isNumber: true),
                                   const SizedBox(width: 8),
-                                  _buildButton('6', onPressed: () => _onNumberPressed('6'), isNumber: true),
+                                  _buildButton('6', '', '6', isNumber: true),
                                 ],
                               ),
                               const SizedBox(height: 8),
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  _buildButton('7', onPressed: () => _onNumberPressed('7'), isNumber: true),
+                                  _buildButton('7', '', '7', isNumber: true),
                                   const SizedBox(width: 8),
-                                  _buildButton('8', onPressed: () => _onNumberPressed('8'), isNumber: true),
+                                  _buildButton('8', '', '8', isNumber: true),
                                   const SizedBox(width: 8),
-                                  _buildButton('9', onPressed: () => _onNumberPressed('9'), isNumber: true),
+                                  _buildButton('9', '', '9', isNumber: true),
                                 ],
                               ),
                               const SizedBox(height: 8),
-                              _buildButton('0', onPressed: () => _onNumberPressed('0'), isNumber: true),
+                              _buildButton('0', '', '0', isNumber: true),
                             ],
                           ),
                         ],
@@ -201,43 +312,23 @@ class _RemoteTabState extends State<RemoteTab> {
                       
                       const SizedBox(height: 8),
                       
-                      // Navegação (D-pad)
+                      // Navegação
                       Column(
                         children: [
-                          _buildButton(Icons.keyboard_arrow_up, onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Cima pressionado')),
-                            );
-                          }),
+                          _buildButton(Icons.keyboard_arrow_up, 'up', 'Cima'),
                           const SizedBox(height: 8),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              _buildButton(Icons.keyboard_arrow_left, onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Esquerda pressionado')),
-                                );
-                              }),
+                              _buildButton(Icons.keyboard_arrow_left, 'left', 'Esquerda'),
                               const SizedBox(width: 16),
-                              _buildButton(Icons.circle, onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('OK pressionado')),
-                                );
-                              }),
+                              _buildButton(Icons.circle, 'ok', 'OK'),
                               const SizedBox(width: 16),
-                              _buildButton(Icons.keyboard_arrow_right, onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Direita pressionado')),
-                                );
-                              }),
+                              _buildButton(Icons.keyboard_arrow_right, 'right', 'Direita'),
                             ],
                           ),
                           const SizedBox(height: 8),
-                          _buildButton(Icons.keyboard_arrow_down, onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Baixo pressionado')),
-                            );
-                          }),
+                          _buildButton(Icons.keyboard_arrow_down, 'down', 'Baixo'),
                         ],
                       ),
                       
@@ -251,34 +342,18 @@ class _RemoteTabState extends State<RemoteTab> {
                             children: [
                               const Text('VOL', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                               const SizedBox(height: 4),
-                              _buildButton(Icons.add, onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Volume + pressionado')),
-                                );
-                              }),
+                              _buildButton(Icons.add, 'vol_up', 'Volume +'),
                               const SizedBox(height: 8),
-                              _buildButton(Icons.remove, onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Volume - pressionado')),
-                                );
-                              }),
+                              _buildButton(Icons.remove, 'vol_down', 'Volume -'),
                             ],
                           ),
                           Column(
                             children: [
                               const Text('CH', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                               const SizedBox(height: 4),
-                              _buildButton(Icons.keyboard_arrow_up, onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Canal + pressionado')),
-                                );
-                              }),
+                              _buildButton(Icons.keyboard_arrow_up, 'ch_up', 'Canal +'),
                               const SizedBox(height: 8),
-                              _buildButton(Icons.keyboard_arrow_down, onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Canal - pressionado')),
-                                );
-                              }),
+                              _buildButton(Icons.keyboard_arrow_down, 'ch_down', 'Canal -'),
                             ],
                           ),
                         ],
@@ -290,21 +365,9 @@ class _RemoteTabState extends State<RemoteTab> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
-                          _buildButton(Icons.home, onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Home pressionado')),
-                            );
-                          }),
-                          _buildButton(Icons.arrow_back, onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Voltar pressionado')),
-                            );
-                          }),
-                          _buildButton(Icons.volume_off, onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Mute pressionado')),
-                            );
-                          }),
+                          _buildButton(Icons.home, 'home', 'Home'),
+                          _buildButton(Icons.arrow_back, 'back', 'Voltar'),
+                          _buildButton(Icons.volume_off, 'mute', 'Mute'),
                         ],
                       ),
                     ],
