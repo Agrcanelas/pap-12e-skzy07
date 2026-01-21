@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 
 class RaspberryService {
   // IMPORTANTE: Substitui pelo IP do teu Raspberry Pi
-  static const String baseUrl = 'http://172.20.10.7:5000';
+  static const String baseUrl = 'http://192.168.1.4:5000';
   
   // Verificar se o Raspberry Pi está online
   Future<Map<String, dynamic>> checkStatus() async {

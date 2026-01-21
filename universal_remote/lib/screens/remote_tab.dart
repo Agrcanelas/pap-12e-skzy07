@@ -40,15 +40,6 @@ class _RemoteTabState extends State<RemoteTab> {
         _isConnected = status['status'] == 'online';
         _isCheckingConnection = false;
       });
-
-      if (!_isConnected) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('⚠️ Raspberry Pi desconectado'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
     }
   }
 
@@ -71,11 +62,9 @@ class _RemoteTabState extends State<RemoteTab> {
 
     final channelNumber = int.parse(_displayNumber);
     
-    // Envia para o Raspberry Pi
     final result = await _raspberryService.sendNumber(_displayNumber);
     
     if (result['success'] == true) {
-      // Adiciona ao histórico
       await _historyService.addHistory(
         userId: _userId!,
         channelNumber: channelNumber,
@@ -84,79 +73,69 @@ class _RemoteTabState extends State<RemoteTab> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('✓ Canal $_displayNumber')),
-        );
         _clearDisplay();
       }
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['message'] ?? 'Erro ao enviar'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
     }
   }
 
-  Future<void> _sendCommand(String command, String label) async {
-    final result = await _raspberryService.sendCommand(command);
+  Future<void> _sendCommand(String command) async {
+    await _raspberryService.sendCommand(command);
+  }
+
+  Widget _buildRemoteButton({
+    required Widget child,
+    required VoidCallback? onPressed,
+    Color? color,
+  }) {
+    final theme = Theme.of(context);
+    final isEnabled = onPressed != null && _isConnected;
+    final buttonColor = color ?? theme.colorScheme.primary.withOpacity(0.9);
     
-    if (mounted) {
-      if (result['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('✓ $label')),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['message'] ?? 'Erro'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  Widget _buildButton(dynamic content, String command, String label, {bool isNumber = false}) {
-    return SizedBox(
-      width: 60,
-      height: 60,
-      child: ElevatedButton(
-        onPressed: _isConnected
-            ? () {
-                if (isNumber) {
-                  _onNumberPressed(content.toString());
-                } else {
-                  _sendCommand(command, label);
-                }
-              }
-            : null,
-        style: ElevatedButton.styleFrom(
-          shape: const CircleBorder(),
-          padding: EdgeInsets.zero,
-          elevation: 2,
-        ),
-        child: content is IconData
-            ? Icon(content, size: 24)
-            : Text(
-                content.toString(),
-                style: TextStyle(
-                  fontSize: isNumber ? 22 : 16,
-                  fontWeight: FontWeight.bold,
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: isEnabled ? buttonColor : Colors.grey.shade400,
+        boxShadow: isEnabled
+            ? [
+                BoxShadow(
+                  color: buttonColor.withOpacity(0.4),
+                  blurRadius: 6,
+                  offset: const Offset(0, 3),
                 ),
-              ),
+              ]
+            : [],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: isEnabled ? onPressed : null,
+          customBorder: const CircleBorder(),
+          child: Center(child: child),
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5),
       appBar: AppBar(
-        title: const Text('Comando Universal'),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.tv, color: theme.colorScheme.primary, size: 24),
+            const SizedBox(width: 8),
+            const Text('Comando', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 20)),
+          ],
+        ),
         centerTitle: true,
         actions: [
           if (_isCheckingConnection)
@@ -170,212 +149,344 @@ class _RemoteTabState extends State<RemoteTab> {
             )
           else
             Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Icon(
-                _isConnected ? Icons.wifi : Icons.wifi_off,
-                color: _isConnected ? Colors.green : Colors.red,
-              ),
-            ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _checkRaspberryConnection,
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              padding: const EdgeInsets.only(right: 4),
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: _isConnected ? Colors.green.withOpacity(0.15) : Colors.red.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: _isConnected ? Colors.green : Colors.red,
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Status
-                      if (!_isConnected && !_isCheckingConnection)
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.shade100,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Row(
-                            children: [
-                              Icon(Icons.warning, color: Colors.orange),
-                              SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'Raspberry Pi desconectado. Verifique a conexão.',
-                                  style: TextStyle(fontSize: 12),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      
-                      if (!_isConnected && !_isCheckingConnection)
-                        const SizedBox(height: 8),
-                      
-                      // Display
                       Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                        width: 8,
+                        height: 8,
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surfaceVariant,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              _displayNumber.isEmpty ? 'Canal' : _displayNumber,
-                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                            ),
-                            if (_displayNumber.isNotEmpty)
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.check_circle, size: 22),
-                                    color: Colors.green,
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
-                                    onPressed: _isConnected ? _confirmChannel : null,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  IconButton(
-                                    icon: const Icon(Icons.backspace, size: 20),
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
-                                    onPressed: _clearDisplay,
-                                  ),
-                                ],
-                              ),
-                          ],
+                          shape: BoxShape.circle,
+                          color: _isConnected ? Colors.green : Colors.red,
                         ),
                       ),
-                      
-                      const SizedBox(height: 8),
-                      
-                      // Power + Números
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          Column(
-                            children: [
-                              _buildButton(Icons.power_settings_new, 'power', 'Power'),
-                            ],
-                          ),
-                          
-                          Column(
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  _buildButton('1', '', '1', isNumber: true),
-                                  const SizedBox(width: 8),
-                                  _buildButton('2', '', '2', isNumber: true),
-                                  const SizedBox(width: 8),
-                                  _buildButton('3', '', '3', isNumber: true),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  _buildButton('4', '', '4', isNumber: true),
-                                  const SizedBox(width: 8),
-                                  _buildButton('5', '', '5', isNumber: true),
-                                  const SizedBox(width: 8),
-                                  _buildButton('6', '', '6', isNumber: true),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  _buildButton('7', '', '7', isNumber: true),
-                                  const SizedBox(width: 8),
-                                  _buildButton('8', '', '8', isNumber: true),
-                                  const SizedBox(width: 8),
-                                  _buildButton('9', '', '9', isNumber: true),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              _buildButton('0', '', '0', isNumber: true),
-                            ],
-                          ),
-                        ],
-                      ),
-                      
-                      const SizedBox(height: 8),
-                      
-                      // Navegação
-                      Column(
-                        children: [
-                          _buildButton(Icons.keyboard_arrow_up, 'up', 'Cima'),
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              _buildButton(Icons.keyboard_arrow_left, 'left', 'Esquerda'),
-                              const SizedBox(width: 16),
-                              _buildButton(Icons.circle, 'ok', 'OK'),
-                              const SizedBox(width: 16),
-                              _buildButton(Icons.keyboard_arrow_right, 'right', 'Direita'),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          _buildButton(Icons.keyboard_arrow_down, 'down', 'Baixo'),
-                        ],
-                      ),
-                      
-                      const SizedBox(height: 8),
-                      
-                      // Volume e Canais
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          Column(
-                            children: [
-                              const Text('VOL', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 4),
-                              _buildButton(Icons.add, 'vol_up', 'Volume +'),
-                              const SizedBox(height: 8),
-                              _buildButton(Icons.remove, 'vol_down', 'Volume -'),
-                            ],
-                          ),
-                          Column(
-                            children: [
-                              const Text('CH', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 4),
-                              _buildButton(Icons.keyboard_arrow_up, 'ch_up', 'Canal +'),
-                              const SizedBox(height: 8),
-                              _buildButton(Icons.keyboard_arrow_down, 'ch_down', 'Canal -'),
-                            ],
-                          ),
-                        ],
-                      ),
-                      
-                      const SizedBox(height: 8),
-                      
-                      // Botões inferiores
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _buildButton(Icons.home, 'home', 'Home'),
-                          _buildButton(Icons.arrow_back, 'back', 'Voltar'),
-                          _buildButton(Icons.volume_off, 'mute', 'Mute'),
-                        ],
+                      const SizedBox(width: 6),
+                      Text(
+                        _isConnected ? 'ON' : 'OFF',
+                        style: TextStyle(
+                          color: _isConnected ? Colors.green.shade700 : Colors.red.shade700,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ],
                   ),
                 ),
               ),
-            );
-          },
+            ),
+          if (!_isCheckingConnection)
+            IconButton(
+              icon: Icon(
+                Icons.refresh,
+                color: _isConnected ? Colors.grey : theme.colorScheme.primary,
+              ),
+              onPressed: _checkRaspberryConnection,
+              tooltip: 'Reconectar',
+            ),
+        ],
+      ),
+      body: Center(
+        child: SingleChildScrollView(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 400),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Display
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF2A2A2A) : Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: theme.colorScheme.primary.withOpacity(0.3),
+                      width: 2,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: theme.colorScheme.primary.withOpacity(0.1),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.tv, color: theme.colorScheme.primary, size: 22),
+                          const SizedBox(width: 12),
+                          Text(
+                            _displayNumber.isEmpty ? '---' : _displayNumber,
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w700,
+                              color: theme.colorScheme.onSurface,
+                              letterSpacing: 4,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_displayNumber.isNotEmpty)
+                        Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.check_circle, size: 26),
+                              color: Colors.green,
+                              onPressed: _isConnected ? _confirmChannel : null,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                            ),
+                            const SizedBox(width: 12),
+                            IconButton(
+                              icon: Icon(Icons.backspace, size: 22, color: theme.colorScheme.onSurface),
+                              onPressed: _clearDisplay,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+
+                // Corpo do comando
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF2A2A2A) : Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      // Power Button
+                      _buildRemoteButton(
+                        onPressed: () => _sendCommand('power'),
+                        color: Colors.red.shade600,
+                        child: const Icon(Icons.power_settings_new, color: Colors.white, size: 26),
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // Row 1: Home, 1, Back
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildRemoteButton(
+                            onPressed: () => _sendCommand('home'),
+                            child: const Icon(Icons.home_rounded, color: Colors.white, size: 22),
+                          ),
+                          _buildRemoteButton(
+                            onPressed: () => _onNumberPressed('1'),
+                            child: const Text('1', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                          ),
+                          _buildRemoteButton(
+                            onPressed: () => _sendCommand('back'),
+                            child: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 22),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 10),
+
+                      // Row 2: 2, 3, 4
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildRemoteButton(
+                            onPressed: () => _onNumberPressed('2'),
+                            child: const Text('2', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                          ),
+                          _buildRemoteButton(
+                            onPressed: () => _onNumberPressed('3'),
+                            child: const Text('3', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                          ),
+                          _buildRemoteButton(
+                            onPressed: () => _onNumberPressed('4'),
+                            child: const Text('4', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 10),
+
+                      // Row 3: 5, 6, 7
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildRemoteButton(
+                            onPressed: () => _onNumberPressed('5'),
+                            child: const Text('5', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                          ),
+                          _buildRemoteButton(
+                            onPressed: () => _onNumberPressed('6'),
+                            child: const Text('6', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                          ),
+                          _buildRemoteButton(
+                            onPressed: () => _onNumberPressed('7'),
+                            child: const Text('7', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 10),
+
+                      // Row 4: 8, 9, Mute
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildRemoteButton(
+                            onPressed: () => _onNumberPressed('8'),
+                            child: const Text('8', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                          ),
+                          _buildRemoteButton(
+                            onPressed: () => _onNumberPressed('9'),
+                            child: const Text('9', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                          ),
+                          _buildRemoteButton(
+                            onPressed: () => _sendCommand('mute'),
+                            child: const Icon(Icons.volume_off_rounded, color: Colors.white, size: 22),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 10),
+
+                      // Row 5: Vol-, 0, Vol+
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildRemoteButton(
+                            onPressed: () => _sendCommand('vol_down'),
+                            color: Colors.blue.shade600,
+                            child: const Text('VOL-', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                          ),
+                          _buildRemoteButton(
+                            onPressed: () => _onNumberPressed('0'),
+                            child: const Text('0', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                          ),
+                          _buildRemoteButton(
+                            onPressed: () => _sendCommand('vol_up'),
+                            color: Colors.blue.shade600,
+                            child: const Text('VOL+', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // D-Pad Navigation
+                      Column(
+                        children: [
+                          _buildRemoteButton(
+                            onPressed: () => _sendCommand('up'),
+                            child: const Icon(Icons.keyboard_arrow_up_rounded, color: Colors.white, size: 28),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _buildRemoteButton(
+                                onPressed: () => _sendCommand('left'),
+                                child: const Icon(Icons.keyboard_arrow_left_rounded, color: Colors.white, size: 28),
+                              ),
+                              const SizedBox(width: 16),
+                              Container(
+                                width: 56,
+                                height: 56,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: theme.colorScheme.secondary,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: theme.colorScheme.secondary.withOpacity(0.4),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: _isConnected ? () => _sendCommand('ok') : null,
+                                    customBorder: const CircleBorder(),
+                                    child: const Center(
+                                      child: Text(
+                                        'OK',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              _buildRemoteButton(
+                                onPressed: () => _sendCommand('right'),
+                                child: const Icon(Icons.keyboard_arrow_right_rounded, color: Colors.white, size: 28),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          _buildRemoteButton(
+                            onPressed: () => _sendCommand('down'),
+                            child: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 28),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // CH- and CH+
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildRemoteButton(
+                            onPressed: () => _sendCommand('ch_down'),
+                            color: Colors.purple.shade600,
+                            child: const Text('CH-', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                          ),
+                          const SizedBox(width: 56), // Espaço para simetria
+                          _buildRemoteButton(
+                            onPressed: () => _sendCommand('ch_up'),
+                            color: Colors.purple.shade600,
+                            child: const Text('CH+', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
