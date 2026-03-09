@@ -1,0 +1,9 @@
+{
+  "@@locale": "en",
+  "appTitle": "Universal Remote",
+  "login": "Login",
+  "register": "Register",
+  "email": "Email",
+  "password": "Password",
+  "logout": "Logout"
+}

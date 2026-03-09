@@ -3,7 +3,6 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
-  // IMPORTANTE: Muda isto para o teu IP local se testares no telemóvel
   // Para web: localhost funciona
   // Para Android emulator: 10.0.2.2
   // Para dispositivo físico: o IP do teu PC (ex: 192.168.1.100)

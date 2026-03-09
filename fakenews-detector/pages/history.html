@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="pt" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Histórico — VeriFact</title>
+  <link rel="stylesheet" href="../css/global.css"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    .history-page { max-width:1000px; margin:0 auto; padding:100px 24px 80px; }
+    .history-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:36px; flex-wrap:wrap; gap:16px; }
+    .history-title { font-family:var(--font-display); font-size:clamp(28px,5vw,48px); letter-spacing:2px; }
+    .stats-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:16px; margin-bottom:36px; }
+    .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; text-align:center; }
+    .stat-card .num { font-family:var(--font-display); font-size:36px; letter-spacing:1px; }
+    .stat-card .num.fake { color:var(--red); }
+    .stat-card .num.real { color:var(--green); }
+    .stat-card .num.suspicious { color:var(--yellow); }
+    .stat-card .num.total { color:var(--accent2); }
+    .stat-card .lbl { font-size:12px; color:var(--text3); text-transform:uppercase; letter-spacing:1px; margin-top:4px; }
+    .scan-list { display:flex; flex-direction:column; gap:12px; }
+    .scan-row { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px 24px; display:grid; grid-template-columns:auto 1fr auto auto; align-items:center; gap:16px; transition:all 0.2s; }
+    .scan-row:hover { border-color:var(--border2); transform:translateX(4px); }
+    .scan-verdict-dot { width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+    .scan-verdict-dot.fake { background:rgba(255,51,102,0.15); }
+    .scan-verdict-dot.real { background:rgba(0,245,160,0.15); }
+    .scan-verdict-dot.suspicious { background:rgba(255,215,0,0.15); }
+    .scan-preview { font-size:14px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .scan-meta { font-size:12px; color:var(--text3); font-family:var(--font-mono); margin-top:4px; }
+    .scan-actions { display:flex; gap:8px; }
+    .scan-action-btn { background:var(--surface2); border:1px solid var(--border); color:var(--text2); padding:6px 12px; border-radius:8px; font-size:12px; font-family:var(--font-main); cursor:pointer; transition:all 0.2s; white-space:nowrap; }
+    .scan-action-btn:hover { border-color:var(--accent); color:var(--accent); }
+    .scan-action-btn.danger:hover { border-color:var(--red); color:var(--red); }
+    .empty-state { text-align:center; padding:80px 24px; color:var(--text3); }
+    .empty-state .icon { font-size:64px; margin-bottom:16px; display:block; }
+    .empty-state h3 { font-size:20px; font-weight:700; color:var(--text2); margin-bottom:8px; }
+    .tabs-bar { display:flex; gap:8px; margin-bottom:28px; }
+    .tab-pill { padding:8px 20px; border-radius:999px; font-size:13px; font-weight:600; border:1px solid var(--border); background:transparent; color:var(--text2); cursor:pointer; transition:all 0.2s; font-family:var(--font-main); }
+    .tab-pill.active { background:var(--accent); color:#000; border-color:var(--accent); }
+    .loading-state { text-align:center; padding:60px; color:var(--text3); }
+    .pagination { display:flex; justify-content:center; gap:8px; margin-top:32px; }
+    .page-btn { padding:8px 16px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text2); cursor:pointer; font-family:var(--font-main); font-size:14px; transition:all 0.2s; }
+    .page-btn:hover, .page-btn.active { border-color:var(--accent); color:var(--accent); background:rgba(0,245,160,0.05); }
+    @media(max-width:700px){ .scan-row{grid-template-columns:auto 1fr; gap:12px;} .scan-actions{grid-column:1/-1;} }
+  </style>
+</head>
+<body>
+
+  <nav class="navbar" id="navbar">
+    <div class="nav-inner">
+      <a href="../index.html" class="logo">
+        <span class="logo-icon">⚡</span>
+        <span class="logo-text">VERI<span class="accent">FACT</span></span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="../index.html" class="nav-link">Início</a></li>
+        <li><a href="scan.html" class="nav-link">Verificar</a></li>
+        <li><a href="history.html" class="nav-link active">Histórico</a></li>
+        <li><a href="login.html" class="nav-link" id="navLoginLink">Entrar</a></li>
+      </ul>
+      <div class="nav-controls">
+        <div class="lang-select">
+          <button class="ctrl-btn" id="langBtn">🌐</button>
+          <div class="lang-dropdown" id="langDropdown">
+            <button onclick="setLang('pt')" class="lang-opt">🇵🇹 Português</button>
+            <button onclick="setLang('en')" class="lang-opt">🇬🇧 English</button>
+            <button onclick="setLang('es')" class="lang-opt">🇪🇸 Español</button>
+            <button onclick="setLang('fr')" class="lang-opt">🇫🇷 Français</button>
+          </div>
+        </div>
+        <button class="ctrl-btn theme-toggle" id="themeToggle">🌙</button>
+        <button class="ctrl-btn mobile-menu-btn" id="mobileMenu">☰</button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="history-page">
+    <div class="history-header">
+      <h1 class="history-title">📂 Histórico</h1>
+      <a href="scan.html" class="btn-primary">+ Nova Verificação</a>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row" id="statsRow">
+      <div class="stat-card"><div class="num total" id="statTotal">—</div><div class="lbl">Total</div></div>
+      <div class="stat-card"><div class="num fake" id="statFake">—</div><div class="lbl">Falsas</div></div>
+      <div class="stat-card"><div class="num suspicious" id="statSuspicious">—</div><div class="lbl">Suspeitas</div></div>
+      <div class="stat-card"><div class="num real" id="statReal">—</div><div class="lbl">Verdadeiras</div></div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs-bar">
+      <button class="tab-pill active" id="tabScans" onclick="showTab('scans')">🔍 Verificações</button>
+      <button class="tab-pill" id="tabReports" onclick="showTab('reports')">📄 Relatórios PDF</button>
+    </div>
+
+    <!-- Scans list -->
+    <div id="panelScans">
+      <div class="loading-state" id="scansLoading">⏳ A carregar...</div>
+      <div class="scan-list" id="scanList" style="display:none"></div>
+      <div class="empty-state" id="scansEmpty" style="display:none">
+        <span class="icon">🔍</span>
+        <h3>Nenhuma verificação ainda</h3>
+        <p>Faz a tua primeira verificação de notícias!</p>
+        <br/><a href="scan.html" class="btn-primary">Verificar agora</a>
+      </div>
+      <div class="pagination" id="scansPagination"></div>
+    </div>
+
+    <!-- Reports list -->
+    <div id="panelReports" style="display:none">
+      <div class="loading-state" id="reportsLoading">⏳ A carregar...</div>
+      <div class="scan-list" id="reportList" style="display:none"></div>
+      <div class="empty-state" id="reportsEmpty" style="display:none">
+        <span class="icon">📄</span>
+        <h3>Nenhum relatório ainda</h3>
+        <p>Gera um relatório PDF após uma verificação.</p>
+      </div>
+    </div>
+  </main>
+
+  <script src="../js/i18n.js"></script>
+  <script src="../js/theme.js"></script>
+  <script src="../js/api.js"></script>
+  <script>
+    const LIMIT = 10;
+    let scansOffset = 0;
+    let scansTotal = 0;
+    let currentTab = 'scans';
+
+    function showTab(tab) {
+      currentTab = tab;
+      document.getElementById('tabScans').classList.toggle('active', tab === 'scans');
+      document.getElementById('tabReports').classList.toggle('active', tab === 'reports');
+      document.getElementById('panelScans').style.display = tab === 'scans' ? '' : 'none';
+      document.getElementById('panelReports').style.display = tab === 'reports' ? '' : 'none';
+    }
+
+    function verdictIcon(v) {
+      return { fake: '❌', real: '✅', suspicious: '⚠️' }[v] || '❓';
+    }
+    function verdictLabel(v) {
+      return { fake: 'FALSO', real: 'VERDADEIRO', suspicious: 'SUSPEITO' }[v] || v;
+    }
+    function formatDate(d) {
+      return new Date(d).toLocaleString('pt-PT', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    }
+
+    async function loadStats() {
+      const res = await Scans.stats();
+      if (res?.success) {
+        const d = res.data;
+        document.getElementById('statTotal').textContent      = d.total ?? 0;
+        document.getElementById('statFake').textContent       = d.fake_count ?? 0;
+        document.getElementById('statSuspicious').textContent = d.suspicious_count ?? 0;
+        document.getElementById('statReal').textContent       = d.real_count ?? 0;
+      }
+    }
+
+    async function loadScans(offset = 0) {
+      document.getElementById('scansLoading').style.display = '';
+      document.getElementById('scanList').style.display = 'none';
+      document.getElementById('scansEmpty').style.display = 'none';
+
+      const res = await Scans.history(LIMIT, offset);
+      document.getElementById('scansLoading').style.display = 'none';
+
+      if (!res?.success) {
+        showToast('Erro ao carregar verificações.', 'error');
+        return;
+      }
+      const { scans, total } = res.data;
+      scansTotal = total;
+      scansOffset = offset;
+
+      if (!scans.length) {
+        document.getElementById('scansEmpty').style.display = '';
+        return;
+      }
+
+      const list = document.getElementById('scanList');
+      list.innerHTML = scans.map(s => `
+        <div class="scan-row">
+          <div class="scan-verdict-dot ${s.verdict}">${verdictIcon(s.verdict)}</div>
+          <div>
+            <div class="scan-preview">${s.preview || '(sem texto)'}</div>
+            <div class="scan-meta">
+              <span class="badge badge-${s.verdict === 'fake' ? 'fake' : s.verdict === 'real' ? 'real' : 'suspicious'}">${verdictLabel(s.verdict)}</span>
+              &nbsp;·&nbsp; ${s.reliability}% fiável
+              &nbsp;·&nbsp; ${s.input_type === 'url' ? '🔗 URL' : '📝 Texto'}
+              &nbsp;·&nbsp; ${formatDate(s.created_at)}
+            </div>
+          </div>
+          <div class="scan-actions">
+            ${s.report_id ? `<button class="scan-action-btn" onclick="showToast('Relatório já existe.','info')">📄 PDF</button>` : ''}
+            <button class="scan-action-btn danger" onclick="deleteScan(${s.id}, this)">🗑 Apagar</button>
+          </div>
+        </div>
+      `).join('');
+      list.style.display = 'flex';
+
+      renderPagination(total, offset);
+    }
+
+    async function deleteScan(id, btn) {
+      if (!confirm('Apagar esta verificação?')) return;
+      btn.disabled = true;
+      const res = await Scans.delete(id);
+      if (res?.success) {
+        showToast('Verificação apagada.', 'success');
+        loadScans(scansOffset);
+        loadStats();
+      } else {
+        showToast(res?.error || 'Erro ao apagar.', 'error');
+        btn.disabled = false;
+      }
+    }
+
+    function renderPagination(total, offset) {
+      const pages = Math.ceil(total / LIMIT);
+      const current = Math.floor(offset / LIMIT);
+      const pag = document.getElementById('scansPagination');
+      if (pages <= 1) { pag.innerHTML = ''; return; }
+      pag.innerHTML = Array.from({length: pages}, (_, i) =>
+        `<button class="page-btn ${i === current ? 'active' : ''}" onclick="loadScans(${i * LIMIT})">${i + 1}</button>`
+      ).join('');
+    }
+
+    async function loadReports() {
+      document.getElementById('reportsLoading').style.display = '';
+      document.getElementById('reportList').style.display = 'none';
+      document.getElementById('reportsEmpty').style.display = 'none';
+
+      const res = await Reports.list(20, 0);
+      document.getElementById('reportsLoading').style.display = 'none';
+
+      if (!res?.success) { showToast('Erro ao carregar relatórios.', 'error'); return; }
+      const { reports } = res.data;
+
+      if (!reports.length) { document.getElementById('reportsEmpty').style.display = ''; return; }
+
+      const list = document.getElementById('reportList');
+      list.innerHTML = reports.map(r => `
+        <div class="scan-row">
+          <div class="scan-verdict-dot ${r.verdict}">📄</div>
+          <div>
+            <div class="scan-preview">${r.filename}</div>
+            <div class="scan-meta">
+              <span class="badge badge-${r.verdict === 'fake' ? 'fake' : r.verdict === 'real' ? 'real' : 'suspicious'}">${verdictLabel(r.verdict)}</span>
+              &nbsp;·&nbsp; ${r.file_size_kb || '?'} KB
+              &nbsp;·&nbsp; ${r.download_count} downloads
+              &nbsp;·&nbsp; ${formatDate(r.generated_at)}
+            </div>
+          </div>
+          <div class="scan-actions">
+            <button class="scan-action-btn danger" onclick="deleteReport(${r.id}, this)">🗑 Apagar</button>
+          </div>
+        </div>
+      `).join('');
+      list.style.display = 'flex';
+    }
+
+    async function deleteReport(id, btn) {
+      if (!confirm('Apagar este relatório?')) return;
+      btn.disabled = true;
+      const res = await Reports.delete(id);
+      if (res?.success) { showToast('Relatório apagado.', 'success'); loadReports(); }
+      else { showToast(res?.error || 'Erro.', 'error'); btn.disabled = false; }
+    }
+
+    // Init — require login
+    document.addEventListener('DOMContentLoaded', () => {
+      if (!Auth.isLoggedIn()) {
+        window.location.href = 'login.html';
+        return;
+      }
+      loadStats();
+      loadScans(0);
+      loadReports();
+    });
+  </script>
+</body>
+</html>

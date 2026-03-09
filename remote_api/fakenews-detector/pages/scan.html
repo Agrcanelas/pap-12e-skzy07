@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="pt" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Verificar — VeriFact</title>
+  <link rel="stylesheet" href="../css/global.css"/>
+  <link rel="stylesheet" href="../css/scan.css"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+
+  <nav class="navbar" id="navbar">
+    <div class="nav-inner">
+      <a href="../index.html" class="logo">
+        <span class="logo-icon">⚡</span>
+        <span class="logo-text">VERI<span class="accent">FACT</span></span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="../index.html" class="nav-link" data-i18n="nav_home">Início</a></li>
+        <li><a href="scan.html" class="nav-link active" data-i18n="nav_scan">Verificar</a></li>
+        <li><a href="login.html" class="nav-link" data-i18n="nav_login">Entrar</a></li>
+        <li><a href="register.html" class="nav-link" data-i18n="nav_register">Registar</a></li>
+      </ul>
+      <div class="nav-controls">
+        <div class="lang-select">
+          <button class="ctrl-btn" id="langBtn">🌐</button>
+          <div class="lang-dropdown" id="langDropdown">
+            <button onclick="setLang('pt')" class="lang-opt">🇵🇹 Português</button>
+            <button onclick="setLang('en')" class="lang-opt">🇬🇧 English</button>
+            <button onclick="setLang('es')" class="lang-opt">🇪🇸 Español</button>
+            <button onclick="setLang('fr')" class="lang-opt">🇫🇷 Français</button>
+          </div>
+        </div>
+        <button class="ctrl-btn theme-toggle" id="themeToggle">🌙</button>
+        <button class="ctrl-btn mobile-menu-btn" id="mobileMenu">☰</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="mobile-nav" id="mobileNav">
+    <a href="../index.html" data-i18n="nav_home">Início</a>
+    <a href="scan.html" data-i18n="nav_scan">Verificar</a>
+    <a href="login.html" data-i18n="nav_login">Entrar</a>
+    <a href="register.html" data-i18n="nav_register">Registar</a>
+  </div>
+
+  <main class="scan-page">
+    <h1 class="scan-page-title" data-i18n="scan_title">Verificador de Notícias</h1>
+    <p class="scan-page-sub" data-i18n="scan_sub">Descobre se uma notícia é verdadeira ou falsa com IA</p>
+
+    <!-- TAB SWITCHER -->
+    <div class="tab-switcher" id="tabSwitcher">
+      <button class="tab-btn active" id="tabText" onclick="switchTab('text')" data-i18n="tab_text">📝 Texto</button>
+      <button class="tab-btn" id="tabUrl" onclick="switchTab('url')" data-i18n="tab_url">🔗 URL</button>
+    </div>
+
+    <!-- INPUT BOX -->
+    <div class="scan-box" id="scanBox">
+      <!-- Text tab -->
+      <div id="panelText">
+        <textarea
+          class="scan-textarea"
+          id="newsText"
+          data-i18n-placeholder="text_placeholder"
+          placeholder="Cola aqui o texto da notícia que queres verificar..."
+          maxlength="5000"
+        ></textarea>
+        <div class="char-count"><span id="charCount">0</span>/5000</div>
+      </div>
+
+      <!-- URL tab -->
+      <div id="panelUrl" style="display:none">
+        <div class="url-input-wrap">
+          <span class="url-icon">🔗</span>
+          <input
+            type="url"
+            class="scan-url-input"
+            id="newsUrl"
+            data-i18n-placeholder="url_placeholder"
+            placeholder="https://exemplo.com/artigo-da-noticia"
+          />
+        </div>
+      </div>
+
+      <div class="scan-actions">
+        <button class="scan-submit-btn" id="scanBtn">
+          <span id="scanBtnTxt" data-i18n="btn_verify">🔍 Verificar Agora</span>
+        </button>
+        <button class="scan-clear-btn" id="clearBtn" data-i18n="btn_clear">Limpar</button>
+      </div>
+    </div>
+
+    <!-- PROGRESS SECTION -->
+    <div class="progress-section" id="progressSection">
+      <div class="progress-title">
+        <span class="progress-spinner"></span>
+        <span data-i18n="progress_title" id="progressTitle">A analisar o conteúdo...</span>
+      </div>
+
+      <div class="steps-list" id="stepsList">
+        <div class="step-item" id="step-0">
+          <div class="step-dot">📥</div>
+          <div class="step-text">
+            <div class="step-text-main" data-i18n="step_fetch">Obter conteúdo</div>
+            <div class="step-text-sub" data-i18n="step_fetch_sub">A recolher dados da notícia</div>
+          </div>
+          <span class="step-status">—</span>
+        </div>
+        <div class="step-item" id="step-1">
+          <div class="step-dot">🔤</div>
+          <div class="step-text">
+            <div class="step-text-main" data-i18n="step_lang">Analisar linguagem</div>
+            <div class="step-text-sub" data-i18n="step_lang_sub">Detetar padrões de desinformação</div>
+          </div>
+          <span class="step-status">—</span>
+        </div>
+        <div class="step-item" id="step-2">
+          <div class="step-dot">🔍</div>
+          <div class="step-text">
+            <div class="step-text-main" data-i18n="step_sources">Verificar fontes</div>
+            <div class="step-text-sub" data-i18n="step_sources_sub">Cruzar com bases de dados de factos</div>
+          </div>
+          <span class="step-status">—</span>
+        </div>
+        <div class="step-item" id="step-3">
+          <div class="step-dot">💬</div>
+          <div class="step-text">
+            <div class="step-text-main" data-i18n="step_sentiment">Análise de sentimento</div>
+            <div class="step-text-sub" data-i18n="step_sentiment_sub">Avaliar o tom e emoções</div>
+          </div>
+          <span class="step-status">—</span>
+        </div>
+        <div class="step-item" id="step-4">
+          <div class="step-dot">⚖️</div>
+          <div class="step-text">
+            <div class="step-text-main" data-i18n="step_verdict">Determinar veredicto</div>
+            <div class="step-text-sub" data-i18n="step_verdict_sub">Calcular pontuação final</div>
+          </div>
+          <span class="step-status">—</span>
+        </div>
+        <div class="step-item" id="step-5">
+          <div class="step-dot">📄</div>
+          <div class="step-text">
+            <div class="step-text-main" data-i18n="step_report">Gerar relatório</div>
+            <div class="step-text-sub" data-i18n="step_report_sub">Preparar PDF com resultados</div>
+          </div>
+          <span class="step-status">—</span>
+        </div>
+      </div>
+
+      <div class="overall-progress">
+        <div class="progress-label">
+          <span id="progressStatus">A iniciar...</span>
+          <span id="progressPct">0%</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progressFill" style="width:0%"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RESULT SECTION -->
+    <div class="result-section" id="resultSection">
+      <!-- Dynamically injected -->
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <span class="logo-text">VERI<span class="accent">FACT</span></span>
+        <p data-i18n="footer_tagline">Combatendo a desinformação com inteligência artificial.</p>
+      </div>
+      <div class="footer-links">
+        <a href="scan.html" data-i18n="nav_scan">Verificar</a>
+        <a href="login.html" data-i18n="nav_login">Entrar</a>
+        <a href="register.html" data-i18n="nav_register">Registar</a>
+      </div>
+      <div class="footer-copy">
+        <p>© 2025 VeriFact · PAP Project · <span data-i18n="footer_built">Feito com IA</span></p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../js/i18n.js"></script>
+  <script src="../js/theme.js"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/scan.js"></script>
+</body>
+</html>

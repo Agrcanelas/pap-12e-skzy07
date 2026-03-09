@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="pt" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Registar — VeriFact</title>
+  <link rel="stylesheet" href="../css/global.css"/>
+  <link rel="stylesheet" href="../css/auth.css"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <nav class="navbar" id="navbar">
+    <div class="nav-inner">
+      <a href="../index.html" class="logo">
+        <span class="logo-icon">⚡</span>
+        <span class="logo-text">VERI<span class="accent">FACT</span></span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="../index.html" class="nav-link" data-i18n="nav_home">Início</a></li>
+        <li><a href="scan.html" class="nav-link" data-i18n="nav_scan">Verificar</a></li>
+        <li><a href="login.html" class="nav-link" data-i18n="nav_login">Entrar</a></li>
+        <li><a href="register.html" class="nav-link active" data-i18n="nav_register">Registar</a></li>
+      </ul>
+      <div class="nav-controls">
+        <div class="lang-select">
+          <button class="ctrl-btn" id="langBtn">🌐</button>
+          <div class="lang-dropdown" id="langDropdown">
+            <button onclick="setLang('pt')" class="lang-opt">🇵🇹 Português</button>
+            <button onclick="setLang('en')" class="lang-opt">🇬🇧 English</button>
+            <button onclick="setLang('es')" class="lang-opt">🇪🇸 Español</button>
+            <button onclick="setLang('fr')" class="lang-opt">🇫🇷 Français</button>
+          </div>
+        </div>
+        <button class="ctrl-btn theme-toggle" id="themeToggle">🌙</button>
+        <button class="ctrl-btn mobile-menu-btn" id="mobileMenu">☰</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="mobile-nav" id="mobileNav">
+    <a href="../index.html" data-i18n="nav_home">Início</a>
+    <a href="scan.html" data-i18n="nav_scan">Verificar</a>
+    <a href="login.html" data-i18n="nav_login">Entrar</a>
+    <a href="register.html" data-i18n="nav_register">Registar</a>
+  </div>
+
+  <div class="auth-page">
+    <!-- Visual side -->
+    <div class="auth-visual">
+      <div class="auth-visual-bg"></div>
+      <div class="auth-visual-content">
+        <span class="auth-visual-icon">🛡️</span>
+        <h2>Junta-te a nós</h2>
+        <p>Cria a tua conta gratuita e torna-te parte da luta contra a desinformação.</p>
+        <div class="auth-visual-features">
+          <div class="auth-feature">
+            <span class="auth-feature-icon">✅</span>
+            Verificações ilimitadas
+          </div>
+          <div class="auth-feature">
+            <span class="auth-feature-icon">📂</span>
+            Guarda os teus relatórios
+          </div>
+          <div class="auth-feature">
+            <span class="auth-feature-icon">🔔</span>
+            Alertas de fake news em tempo real
+          </div>
+          <div class="auth-feature">
+            <span class="auth-feature-icon">🌍</span>
+            Comunidade de verificadores
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Form side -->
+    <div class="auth-form-section">
+      <div class="auth-form-box">
+        <a href="../index.html" class="auth-logo-top">
+          VERI<span class="accent">FACT</span>
+        </a>
+        <h1 class="auth-title" data-i18n="register_title">Criar conta</h1>
+        <p class="auth-sub">
+          <span data-i18n="register_sub">Já tens conta? </span>
+          <a href="login.html" data-i18n="register_sub2">Entrar</a>
+        </p>
+
+        <div id="registerError" class="form-error"></div>
+        <div id="registerSuccess" class="form-success"></div>
+
+        <form class="auth-form" id="registerForm" novalidate>
+          <div class="form-group">
+            <label class="form-label" data-i18n="label_name">Nome completo</label>
+            <div class="input-with-icon">
+              <span class="input-icon">👤</span>
+              <input type="text" class="form-input" id="registerName"
+                data-i18n-placeholder="ph_name" placeholder="O teu nome" required autocomplete="name"/>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" data-i18n="label_email">Email</label>
+            <div class="input-with-icon">
+              <span class="input-icon">✉️</span>
+              <input type="email" class="form-input" id="registerEmail"
+                data-i18n-placeholder="ph_email" placeholder="email@exemplo.com" required autocomplete="email"/>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" data-i18n="label_password">Palavra-passe</label>
+            <div class="input-with-icon">
+              <span class="input-icon">🔒</span>
+              <input type="password" class="form-input" id="registerPassword"
+                placeholder="Cria uma palavra-passe segura" required autocomplete="new-password"/>
+              <button type="button" class="pw-toggle" id="togglePw">👁</button>
+            </div>
+            <div class="pw-strength">
+              <div class="pw-strength-bar">
+                <div class="pw-strength-seg"></div>
+                <div class="pw-strength-seg"></div>
+                <div class="pw-strength-seg"></div>
+                <div class="pw-strength-seg"></div>
+                <div class="pw-strength-seg"></div>
+              </div>
+              <span class="pw-strength-label"></span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" data-i18n="label_confirm">Confirmar palavra-passe</label>
+            <div class="input-with-icon">
+              <span class="input-icon">🔒</span>
+              <input type="password" class="form-input" id="registerConfirm"
+                placeholder="Repete a palavra-passe" required autocomplete="new-password"/>
+              <button type="button" class="pw-toggle" id="togglePw2">👁</button>
+            </div>
+          </div>
+
+          <button type="submit" class="auth-btn" id="registerBtn" data-i18n="register_btn">
+            Criar Conta
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/i18n.js"></script>
+  <script src="../js/theme.js"></script>
+  <script src="../js/auth.js"></script>
+</body>
+</html>

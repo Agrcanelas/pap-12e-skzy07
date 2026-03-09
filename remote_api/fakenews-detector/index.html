@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="pt" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>VeriFact — Detector de Fake News</title>
+  <link rel="stylesheet" href="css/global.css" />
+  <link rel="stylesheet" href="css/home.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <nav class="navbar" id="navbar">
+    <div class="nav-inner">
+      <a href="index.html" class="logo">
+        <span class="logo-icon">⚡</span>
+        <span class="logo-text">VERI<span class="accent">FACT</span></span>
+      </a>
+
+      <ul class="nav-links">
+        <li><a href="index.html" class="nav-link active" data-i18n="nav_home">Início</a></li>
+        <li><a href="pages/scan.html" class="nav-link" data-i18n="nav_scan">Verificar</a></li>
+        <li><a href="pages/login.html" class="nav-link" data-i18n="nav_login">Entrar</a></li>
+        <li><a href="pages/register.html" class="nav-link" data-i18n="nav_register">Registar</a></li>
+      </ul>
+
+      <div class="nav-controls">
+        <!-- Language selector -->
+        <div class="lang-select">
+          <button class="ctrl-btn" id="langBtn" title="Idioma">🌐</button>
+          <div class="lang-dropdown" id="langDropdown">
+            <button onclick="setLang('pt')" class="lang-opt">🇵🇹 Português</button>
+            <button onclick="setLang('en')" class="lang-opt">🇬🇧 English</button>
+            <button onclick="setLang('es')" class="lang-opt">🇪🇸 Español</button>
+            <button onclick="setLang('fr')" class="lang-opt">🇫🇷 Français</button>
+          </div>
+        </div>
+        <!-- Theme toggle -->
+        <button class="ctrl-btn theme-toggle" id="themeToggle" title="Tema">🌙</button>
+        <!-- Mobile menu -->
+        <button class="ctrl-btn mobile-menu-btn" id="mobileMenu">☰</button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- MOBILE MENU -->
+  <div class="mobile-nav" id="mobileNav">
+    <a href="index.html" data-i18n="nav_home">Início</a>
+    <a href="pages/scan.html" data-i18n="nav_scan">Verificar</a>
+    <a href="pages/login.html" data-i18n="nav_login">Entrar</a>
+    <a href="pages/register.html" data-i18n="nav_register">Registar</a>
+  </div>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-bg">
+      <div class="grid-overlay"></div>
+      <div class="glitch-lines"></div>
+    </div>
+    <div class="hero-content">
+      <div class="hero-badge" data-i18n="hero_badge">🔍 IA contra Desinformação</div>
+      <h1 class="hero-title">
+        <span class="line1" data-i18n="hero_title1">DETECTA</span>
+        <span class="line2" data-i18n="hero_title2">FAKE NEWS</span>
+        <span class="line3" data-i18n="hero_title3">EM SEGUNDOS</span>
+      </h1>
+      <p class="hero-sub" data-i18n="hero_sub">Cola uma notícia ou URL e descobre se é verdadeira ou falsa. Com relatório PDF completo.</p>
+      <div class="hero-actions">
+        <a href="pages/scan.html" class="btn-primary" data-i18n="hero_cta">Verificar Agora →</a>
+        <a href="#trending" class="btn-ghost" data-i18n="hero_cta2">Ver Notícias →</a>
+      </div>
+      <div class="hero-stats">
+        <div class="stat"><span class="stat-num">98%</span><span class="stat-label" data-i18n="stat1">Precisão</span></div>
+        <div class="stat"><span class="stat-num">2M+</span><span class="stat-label" data-i18n="stat2">Verificações</span></div>
+        <div class="stat"><span class="stat-num">&lt;5s</span><span class="stat-label" data-i18n="stat3">Tempo médio</span></div>
+      </div>
+    </div>
+    <div class="hero-visual">
+      <div class="scan-demo">
+        <div class="scan-ring ring1"></div>
+        <div class="scan-ring ring2"></div>
+        <div class="scan-ring ring3"></div>
+        <div class="scan-center">
+          <span class="scan-icon">🔎</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- QUICK SCAN BAR -->
+  <section class="quick-scan">
+    <div class="qs-inner">
+      <input type="text" class="qs-input" id="quickInput" placeholder="Cola um texto ou URL aqui para verificação rápida..." data-i18n-placeholder="quick_placeholder"/>
+      <a href="pages/scan.html" class="qs-btn" id="quickScanBtn" data-i18n="quick_btn">Verificar</a>
+    </div>
+  </section>
+
+  <!-- TRENDING NEWS -->
+  <section class="trending" id="trending">
+    <div class="section-header">
+      <h2 class="section-title" data-i18n="trending_title">📡 Notícias em Destaque</h2>
+      <p class="section-sub" data-i18n="trending_sub">Análise em tempo real das notícias mais partilhadas</p>
+    </div>
+    <div class="news-grid" id="newsGrid">
+      <!-- Injected by JS -->
+      <div class="news-skeleton"></div>
+      <div class="news-skeleton"></div>
+      <div class="news-skeleton"></div>
+      <div class="news-skeleton"></div>
+      <div class="news-skeleton"></div>
+      <div class="news-skeleton"></div>
+    </div>
+    <div class="load-more-wrap">
+      <button class="btn-ghost" id="loadMoreBtn" data-i18n="load_more">Carregar mais</button>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="how-it-works">
+    <div class="section-header">
+      <h2 class="section-title" data-i18n="how_title">Como Funciona</h2>
+    </div>
+    <div class="steps-grid">
+      <div class="step-card">
+        <div class="step-num">01</div>
+        <div class="step-icon">📋</div>
+        <h3 data-i18n="step1_title">Insere o conteúdo</h3>
+        <p data-i18n="step1_desc">Cola o texto da notícia ou o URL do artigo que queres verificar.</p>
+      </div>
+      <div class="step-arrow">→</div>
+      <div class="step-card">
+        <div class="step-num">02</div>
+        <div class="step-icon">🤖</div>
+        <h3 data-i18n="step2_title">IA analisa</h3>
+        <p data-i18n="step2_desc">O nosso modelo de IA verifica fontes, linguagem e padrões de desinformação.</p>
+      </div>
+      <div class="step-arrow">→</div>
+      <div class="step-card">
+        <div class="step-num">03</div>
+        <div class="step-icon">📊</div>
+        <h3 data-i18n="step3_title">Recebe o relatório</h3>
+        <p data-i18n="step3_desc">Descarrega o relatório completo em PDF com a análise detalhada.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <span class="logo-text">VERI<span class="accent">FACT</span></span>
+        <p data-i18n="footer_tagline">Combatendo a desinformação com inteligência artificial.</p>
+      </div>
+      <div class="footer-links">
+        <a href="pages/scan.html" data-i18n="nav_scan">Verificar</a>
+        <a href="pages/login.html" data-i18n="nav_login">Entrar</a>
+        <a href="pages/register.html" data-i18n="nav_register">Registar</a>
+      </div>
+      <div class="footer-copy">
+        <p>© 2025 VeriFact · PAP Project · <span data-i18n="footer_built">Feito com IA</span></p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/i18n.js"></script>
+  <script src="js/theme.js"></script>
+  <script src="js/home.js"></script>
+</body>
+</html>
