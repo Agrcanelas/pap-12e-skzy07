@@ -4,7 +4,8 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Histórico — VeriFact</title>
-  <link rel="stylesheet" href="../css/global.css"/>
+  <link rel="stylesheet" href="../css/global.css?v=2"/>
+  <link rel="stylesheet" href="../css/footer.css?v=1"/>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
@@ -47,21 +48,17 @@
 </head>
 <body>
 
+  <!-- NAVBAR (preenchida dinamicamente pelo auth.js) -->
   <nav class="navbar" id="navbar">
     <div class="nav-inner">
       <a href="../index.html" class="logo">
         <span class="logo-icon">⚡</span>
         <span class="logo-text">VERI<span class="accent">FACT</span></span>
       </a>
-      <ul class="nav-links">
-        <li><a href="../index.html" class="nav-link">Início</a></li>
-        <li><a href="scan.html" class="nav-link">Verificar</a></li>
-        <li><a href="history.html" class="nav-link active">Histórico</a></li>
-        <li><a href="login.html" class="nav-link" id="navLoginLink">Entrar</a></li>
-      </ul>
+      <ul class="nav-links"></ul>
       <div class="nav-controls">
         <div class="lang-select">
-          <button class="ctrl-btn" id="langBtn">🌐</button>
+          <button class="ctrl-btn" id="langBtn" title="Idioma">🌐</button>
           <div class="lang-dropdown" id="langDropdown">
             <button onclick="setLang('pt')" class="lang-opt">🇵🇹 Português</button>
             <button onclick="setLang('en')" class="lang-opt">🇬🇧 English</button>
@@ -69,11 +66,14 @@
             <button onclick="setLang('fr')" class="lang-opt">🇫🇷 Français</button>
           </div>
         </div>
-        <button class="ctrl-btn theme-toggle" id="themeToggle">🌙</button>
+        <button class="ctrl-btn theme-toggle" id="themeToggle" title="Tema">🌙</button>
         <button class="ctrl-btn mobile-menu-btn" id="mobileMenu">☰</button>
       </div>
     </div>
   </nav>
+
+  <!-- MOBILE MENU (preenchido pelo auth.js) -->
+  <div class="mobile-nav" id="mobileNav"></div>
 
   <main class="history-page">
     <div class="history-header">
@@ -123,6 +123,7 @@
   <script src="../js/i18n.js"></script>
   <script src="../js/theme.js"></script>
   <script src="../js/api.js"></script>
+  <script src="../js/auth.js"></script>
   <script>
     const LIMIT = 10;
     let scansOffset = 0;
@@ -151,10 +152,10 @@
       const res = await Scans.stats();
       if (res?.success) {
         const d = res.data;
-        document.getElementById('statTotal').textContent      = d.total ?? 0;
-        document.getElementById('statFake').textContent       = d.fake_count ?? 0;
+        document.getElementById('statTotal').textContent      = d.total          ?? 0;
+        document.getElementById('statFake').textContent       = d.fake_count     ?? 0;
         document.getElementById('statSuspicious').textContent = d.suspicious_count ?? 0;
-        document.getElementById('statReal').textContent       = d.real_count ?? 0;
+        document.getElementById('statReal').textContent       = d.real_count     ?? 0;
       }
     }
 
@@ -166,40 +167,30 @@
       const res = await Scans.history(LIMIT, offset);
       document.getElementById('scansLoading').style.display = 'none';
 
-      if (!res?.success) {
-        showToast('Erro ao carregar verificações.', 'error');
-        return;
-      }
+      if (!res?.success) { VF_toast('Erro ao carregar verificações.', 'error'); return; }
       const { scans, total } = res.data;
-      scansTotal = total;
-      scansOffset = offset;
+      scansTotal = total; scansOffset = offset;
 
-      if (!scans.length) {
-        document.getElementById('scansEmpty').style.display = '';
-        return;
-      }
+      if (!scans.length) { document.getElementById('scansEmpty').style.display = ''; return; }
 
       const list = document.getElementById('scanList');
       list.innerHTML = scans.map(s => `
         <div class="scan-row">
           <div class="scan-verdict-dot ${s.verdict}">${verdictIcon(s.verdict)}</div>
-          <div>
-            <div class="scan-preview">${s.preview || '(sem texto)'}</div>
+          <div style="min-width:0">
+            <div class="scan-preview">${s.preview || s.input_content?.substring(0,120) || '(sem texto)'}</div>
             <div class="scan-meta">
-              <span class="badge badge-${s.verdict === 'fake' ? 'fake' : s.verdict === 'real' ? 'real' : 'suspicious'}">${verdictLabel(s.verdict)}</span>
+              <span class="badge badge-${s.verdict==='fake'?'fake':s.verdict==='real'?'real':'suspicious'}">${verdictLabel(s.verdict)}</span>
               &nbsp;·&nbsp; ${s.reliability}% fiável
-              &nbsp;·&nbsp; ${s.input_type === 'url' ? '🔗 URL' : '📝 Texto'}
+              &nbsp;·&nbsp; ${s.input_type==='url'?'🔗 URL':'📝 Texto'}
               &nbsp;·&nbsp; ${formatDate(s.created_at)}
             </div>
           </div>
           <div class="scan-actions">
-            ${s.report_id ? `<button class="scan-action-btn" onclick="showToast('Relatório já existe.','info')">📄 PDF</button>` : ''}
             <button class="scan-action-btn danger" onclick="deleteScan(${s.id}, this)">🗑 Apagar</button>
           </div>
-        </div>
-      `).join('');
+        </div>`).join('');
       list.style.display = 'flex';
-
       renderPagination(total, offset);
     }
 
@@ -207,14 +198,8 @@
       if (!confirm('Apagar esta verificação?')) return;
       btn.disabled = true;
       const res = await Scans.delete(id);
-      if (res?.success) {
-        showToast('Verificação apagada.', 'success');
-        loadScans(scansOffset);
-        loadStats();
-      } else {
-        showToast(res?.error || 'Erro ao apagar.', 'error');
-        btn.disabled = false;
-      }
+      if (res?.success) { VF_toast('Verificação apagada.', 'success'); loadScans(scansOffset); loadStats(); }
+      else { VF_toast(res?.error || 'Erro ao apagar.', 'error'); btn.disabled = false; }
     }
 
     function renderPagination(total, offset) {
@@ -222,8 +207,8 @@
       const current = Math.floor(offset / LIMIT);
       const pag = document.getElementById('scansPagination');
       if (pages <= 1) { pag.innerHTML = ''; return; }
-      pag.innerHTML = Array.from({length: pages}, (_, i) =>
-        `<button class="page-btn ${i === current ? 'active' : ''}" onclick="loadScans(${i * LIMIT})">${i + 1}</button>`
+      pag.innerHTML = Array.from({length: pages}, (_,i) =>
+        `<button class="page-btn ${i===current?'active':''}" onclick="loadScans(${i*LIMIT})">${i+1}</button>`
       ).join('');
     }
 
@@ -235,10 +220,9 @@
       const res = await Reports.list(20, 0);
       document.getElementById('reportsLoading').style.display = 'none';
 
-      if (!res?.success) { showToast('Erro ao carregar relatórios.', 'error'); return; }
+      if (!res?.success) { document.getElementById('reportsEmpty').style.display = ''; return; }
       const { reports } = res.data;
-
-      if (!reports.length) { document.getElementById('reportsEmpty').style.display = ''; return; }
+      if (!reports?.length) { document.getElementById('reportsEmpty').style.display = ''; return; }
 
       const list = document.getElementById('reportList');
       list.innerHTML = reports.map(r => `
@@ -247,17 +231,15 @@
           <div>
             <div class="scan-preview">${r.filename}</div>
             <div class="scan-meta">
-              <span class="badge badge-${r.verdict === 'fake' ? 'fake' : r.verdict === 'real' ? 'real' : 'suspicious'}">${verdictLabel(r.verdict)}</span>
-              &nbsp;·&nbsp; ${r.file_size_kb || '?'} KB
-              &nbsp;·&nbsp; ${r.download_count} downloads
+              <span class="badge badge-${r.verdict==='fake'?'fake':r.verdict==='real'?'real':'suspicious'}">${verdictLabel(r.verdict)}</span>
+              &nbsp;·&nbsp; ${r.file_size_kb||'?'} KB &nbsp;·&nbsp; ${r.download_count} downloads
               &nbsp;·&nbsp; ${formatDate(r.generated_at)}
             </div>
           </div>
           <div class="scan-actions">
-            <button class="scan-action-btn danger" onclick="deleteReport(${r.id}, this)">🗑 Apagar</button>
+            <button class="scan-action-btn danger" onclick="deleteReport(${r.id},this)">🗑 Apagar</button>
           </div>
-        </div>
-      `).join('');
+        </div>`).join('');
       list.style.display = 'flex';
     }
 
@@ -265,20 +247,95 @@
       if (!confirm('Apagar este relatório?')) return;
       btn.disabled = true;
       const res = await Reports.delete(id);
-      if (res?.success) { showToast('Relatório apagado.', 'success'); loadReports(); }
-      else { showToast(res?.error || 'Erro.', 'error'); btn.disabled = false; }
+      if (res?.success) { VF_toast('Relatório apagado.', 'success'); loadReports(); }
+      else { VF_toast(res?.error||'Erro.','error'); btn.disabled=false; }
     }
 
     // Init — require login
     document.addEventListener('DOMContentLoaded', () => {
-      if (!Auth.isLoggedIn()) {
-        window.location.href = 'login.html';
-        return;
-      }
+      // Verificar token localmente sem ir ao servidor
+      if (!VF_isLoggedIn()) { window.location.href = 'login.html'; return; }
       loadStats();
       loadScans(0);
       loadReports();
     });
   </script>
+  <footer class="footer">
+    <div class="footer-main">
+
+      <!-- Coluna 1: Brand -->
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-logo">
+          <span class="logo-icon">⚡</span>
+          <span class="logo-text">VERI<span class="accent">FACT</span></span>
+        </a>
+        <p class="footer-tagline">Combatendo a desinformação com<br>inteligência artificial.</p>
+        <div class="footer-badges">
+          <span class="footer-badge">🤖 Groq AI</span>
+          <span class="footer-badge">🔍 Fact Check API</span>
+          <span class="footer-badge">📰 NewsAPI</span>
+        </div>
+      </div>
+
+      <!-- Coluna 2: Navegação -->
+      <div class="footer-col">
+        <div class="footer-col-title">Navegação</div>
+        <ul class="footer-nav">
+          <li><a href="../index.html">🏠 Início</a></li>
+          <li><a href="scan.html">🔍 Verificar Notícia</a></li>
+          <li><a href="news.html">📰 Notícias</a></li>
+          <li><a href="history.html">📂 Histórico</a></li>
+          <li><a href="profile.html">👤 Perfil</a></li>
+        </ul>
+      </div>
+
+      <!-- Coluna 3: Conta -->
+      <div class="footer-col">
+        <div class="footer-col-title">Conta</div>
+        <ul class="footer-nav">
+          <li><a href="login.html">🔑 Entrar</a></li>
+          <li><a href="register.html">✨ Registar</a></li>
+        </ul>
+        <div class="footer-col-title" style="margin-top:20px">Tecnologias</div>
+        <ul class="footer-nav">
+          <li><a href="https://groq.com" target="_blank">Groq (LLaMA 3.3)</a></li>
+          <li><a href="https://developers.google.com/fact-check/tools/api" target="_blank">Google Fact Check</a></li>
+          <li><a href="https://newsapi.org" target="_blank">NewsAPI</a></li>
+        </ul>
+      </div>
+
+      <!-- Coluna 4: Projeto -->
+      <div class="footer-col">
+        <div class="footer-col-title">Projeto PAP</div>
+        <p class="footer-about">O VeriFact é um projeto desenvolvido no âmbito da Prova de Aptidão Profissional (PAP), com o objetivo de combater a desinformação através de tecnologias de IA.</p>
+        <div class="footer-stats">
+          <div class="footer-stat">
+            <span class="footer-stat-num">3</span>
+            <span class="footer-stat-label">APIs integradas</span>
+          </div>
+          <div class="footer-stat">
+            <span class="footer-stat-num">IA</span>
+            <span class="footer-stat-label">LLaMA 3.3 70B</span>
+          </div>
+          <div class="footer-stat">
+            <span class="footer-stat-num">100%</span>
+            <span class="footer-stat-label">Gratuito</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Bottom bar -->
+    <div class="footer-bottom">
+      <div class="footer-bottom-inner">
+        <span>© 2025 VeriFact · Projeto PAP · Feito com ❤️ e IA</span>
+        <div class="footer-bottom-links">
+          <span class="footer-disclaimer">⚠️ As análises são geradas por IA e podem conter erros. Verifica sempre as fontes originais.</span>
+        </div>
+
+      </div>
+    </div>
+  </footer>
 </body>
 </html>

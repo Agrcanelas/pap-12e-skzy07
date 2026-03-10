@@ -72,18 +72,35 @@ function verifyJWT(string $token): ?array {
 }
 
 function getAuthUser(): ?array {
-    $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+    // XAMPP/Apache às vezes não passa HTTP_AUTHORIZATION — usar múltiplos fallbacks
+    $authHeader = $_SERVER['HTTP_AUTHORIZATION']
+               ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION']
+               ?? '';
+
+    // Fallback via getallheaders() (funciona na maioria dos casos com Apache)
+    if (!$authHeader) {
+        $headers = function_exists('getallheaders') ? getallheaders() : [];
+        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+    }
+
+    // Último fallback: token via query string ?_token=... ou POST body
+    if (!$authHeader) {
+        $t = $_GET['_token'] ?? $_POST['_token'] ?? '';
+        if ($t) $authHeader = 'Bearer ' . $t;
+    }
+
     if (!str_starts_with($authHeader, 'Bearer ')) return null;
     $token = substr($authHeader, 7);
     $payload = verifyJWT($token);
     if (!$payload) return null;
 
-    // Verificar se o token ainda está na DB (logout support)
+    // Buscar utilizador diretamente pelo ID do JWT (sem depender da tabela sessions)
+    $userId = $payload['sub'] ?? null;
+    if (!$userId) return null;
+
     $db = DB::get();
-    $stmt = $db->prepare('SELECT s.id, u.id as user_id, u.name, u.email, u.role
-                          FROM sessions s JOIN users u ON u.id = s.user_id
-                          WHERE s.token = ? AND s.expires_at > NOW() AND u.is_active = 1');
-    $stmt->execute([$token]);
+    $stmt = $db->prepare('SELECT id as user_id, name, email, role FROM users WHERE id = ? AND is_active = 1');
+    $stmt->execute([$userId]);
     return $stmt->fetch() ?: null;
 }
 

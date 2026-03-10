@@ -4,8 +4,10 @@
 //  Prioridade: GNews → NewsData.io → RSS feeds → Fallback estático
 // ============================================================
 
+ob_start(); // capturar qualquer output indesejado
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
+header('X-Content-Type-Options: nosniff');
 
 // ── CHAVES API ───────────────────────────────────────────────
 // GNews: regista em https://gnews.io (100 pedidos/dia grátis, FUNCIONA em localhost)
@@ -208,4 +210,5 @@ $articles = array_slice($articles, 0, 40);
 // ── Cache ────────────────────────────────────────────────────
 file_put_contents(CACHE_FILE, json_encode(['ts' => time(), 'articles' => $articles, 'source' => $source]));
 
-echo json_encode(['success' => true, 'articles' => $articles, 'source' => $source, 'total' => count($articles)]);
+ob_end_clean(); // limpar qualquer warning PHP que possa corromper o JSON
+echo json_encode(['success' => true, 'articles' => $articles, 'source' => $source, 'total' => count($articles)], JSON_UNESCAPED_UNICODE);

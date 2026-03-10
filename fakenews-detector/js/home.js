@@ -1,165 +1,255 @@
-// ===== home.js =====
-const TRENDING_NEWS = [
-  {
-    title: "Governo anuncia novo plano de combate à desinformação nas redes sociais",
-    source: "Público",
-    snippet: "O executivo propõe novas medidas para regular plataformas digitais e combater a propagação de notícias falsas.",
-    date: "Há 2 horas",
-    verdict: "real",
-    reliability: 91,
-    category: "Política"
-  },
-  {
-    title: "Vitamina C em doses altas cura cancro, diz estudo viral",
-    source: "Blog Saúde Total",
-    snippet: "Publicação viral afirma que tomar 10g de vitamina C diariamente elimina completamente células cancerígenas.",
-    date: "Há 5 horas",
-    verdict: "fake",
-    reliability: 8,
-    category: "Saúde"
-  },
-  {
-    title: "Portugal entre os países com melhor qualidade de vida segundo novo ranking",
-    source: "Jornal de Negócios",
-    snippet: "Relatório internacional coloca Portugal em 14.º lugar a nível mundial em qualidade de vida.",
-    date: "Há 8 horas",
-    verdict: "real",
-    reliability: 85,
-    category: "Sociedade"
-  },
-  {
-    title: "Cientistas descobrem que o 5G provoca alterações genéticas",
-    source: "InfoAlternativa.net",
-    snippet: "Suposto estudo afirma que a radiação das redes 5G modifica o ADN humano após exposição prolongada.",
-    date: "Há 12 horas",
-    verdict: "fake",
-    reliability: 4,
-    category: "Tecnologia"
-  },
-  {
-    title: "Banco de Portugal alerta para novo esquema de phishing",
-    source: "BdP",
-    snippet: "Autoridade monetária avisa cidadãos sobre mensagens falsas que imitam comunicações oficiais bancárias.",
-    date: "Ontem",
-    verdict: "real",
-    reliability: 97,
-    category: "Economia"
-  },
-  {
-    title: "Eleições presidenciais: candidato terá dito algo que nunca disse",
-    source: "ViralPT.com",
-    snippet: "Vídeo editado circula nas redes sociais atribuindo declarações falsas a figura política.",
-    date: "Ontem",
-    verdict: "suspicious",
-    reliability: 32,
-    category: "Política"
-  }
-];
+// ============================================================
+//  home.js — VeriFact: Carrossel de notícias na homepage
+// ============================================================
 
-let newsOffset = 0;
-const NEWS_PER_LOAD = 6;
+const NEWS_CACHE_KEY = 'vf_news_v5';
+const NEWS_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 horas
 
-function getReliabilityClass(score) {
-  if (score >= 70) return 'high';
-  if (score >= 40) return 'medium';
-  return 'low';
+let carouselNews    = [];
+let carouselIdx     = 0;
+let carouselTimer   = null;
+let isAnimating     = false;
+
+const catColors = {
+  'Saúde':'#ff6b9d','Tecnologia':'#00d4ff','Política':'#a78bfa',
+  'Economia':'#fbbf24','Ciência':'#34d399','Desporto':'#fb923c',
+  'Fact-Check':'#f87171','Mundo':'#94a3b8'
+};
+
+// ── Proxy ─────────────────────────────────────────────────
+function getProxyUrl() {
+  return 'https://verifact.fwh.is/fakenews-detector/backend/core/news.php';
 }
 
-function renderNewsCard(news) {
-  const relClass = getReliabilityClass(news.reliability);
-  const verdictLabel = {
-    real: { text: '✓ VERDADEIRO', class: 'badge-real' },
-    fake: { text: '✗ FALSO', class: 'badge-fake' },
-    suspicious: { text: '⚠ SUSPEITO', class: 'badge-suspicious' }
-  }[news.verdict] || { text: '? INCERTO', class: '' };
+// ── Cache ─────────────────────────────────────────────────
+function getCached() {
+  try {
+    const r = JSON.parse(localStorage.getItem(NEWS_CACHE_KEY)||'null');
+    return (r && Date.now()-r.ts < NEWS_CACHE_TTL) ? r.articles : null;
+  } catch { return null; }
+}
+function setCache(a) {
+  try { localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify({ts:Date.now(),articles:a})); } catch {}
+}
 
-  return `
-    <div class="news-card ${news.verdict}" onclick="goToScan('${encodeURIComponent(news.title)}')">
-      <div class="news-card-header">
-        <div>
-          <div class="news-source">${news.source} · ${news.category}</div>
+// ── Normalizar artigo ─────────────────────────────────────
+function normalize(a) {
+  const ms  = Date.now() - new Date(a.publishedAt);
+  const h   = Math.round(ms/3600000);
+  const age = h<1?'Agora mesmo':h<24?'Há '+h+'h':h<48?'Ontem':'Há '+Math.round(h/24)+'d';
+  const text = ((a.title||'')+(a.description||'')).toLowerCase();
+  const cat =
+    /saúde|médic|vírus|covid|vacin|cancer|hospital/.test(text)             ?'Saúde':
+    /tecnolog|inteligência artificial|robot|software|hacker|cyber|ia /.test(text)?'Tecnologia':
+    /polít|govern|eleição|parlamento|presidente|ministro/.test(text)       ?'Política':
+    /economia|banco|euro|inflação|mercado|bolsa/.test(text)                ?'Economia':
+    /ciência|estudo|investigação|descobert|universidade|espaço/.test(text) ?'Ciência':
+    /desport|futebol|sport|jogo|campeonato/.test(text)                     ?'Desporto':
+    /fake news|desinformação|fact.check|misinformation/.test(text)         ?'Fact-Check':'Mundo';
+  return {
+    title:a.title||'Sem título', source:a.source?.name||'Internacional',
+    snippet:a.description||'', url:a.url||'#',
+    image:a.urlToImage||null, date:age, category:cat
+  };
+}
+
+// ── Render slide do carrossel ─────────────────────────────
+function renderSlide(n, idx) {
+  const enc   = encodeURIComponent(n.title.slice(0,200));
+  const color = catColors[n.category]||'#94a3b8';
+  const imgStyle = n.image
+    ? 'background-image:url(\''+n.image+'\')'
+    : 'background:linear-gradient(135deg,var(--surface2),var(--bg3))';
+
+  return `<div class="carousel-slide" data-idx="${idx}">
+    <div class="carousel-card" onclick="goToScan('${enc}')">
+      <div class="carousel-card-img" style="${imgStyle}">
+        ${!n.image?'<span class="carousel-card-placeholder-icon">'+n.category[0]+'</span>':''}
+        <div class="carousel-card-overlay"></div>
+        <div class="carousel-card-badge" style="background:${color}22;color:${color};border-color:${color}44">${n.category}</div>
+        <div class="carousel-card-content">
+          <div class="carousel-card-source">${n.source} · ${n.date}</div>
+          <div class="carousel-card-title">${n.title}</div>
+          ${n.snippet?'<div class="carousel-card-snippet">'+n.snippet.slice(0,140)+(n.snippet.length>140?'...':'')+'</div>':''}
+          <div class="carousel-card-actions">
+            ${n.url!=='#'?'<a href="'+n.url+'" target="_blank" class="carousel-btn-read" onclick="event.stopPropagation()">Ler artigo →</a>':''}
+            <button class="carousel-btn-verify" onclick="event.stopPropagation();goToScan('${enc}')">🔍 Verificar</button>
+          </div>
         </div>
-        <span class="badge ${verdictLabel.class}">${verdictLabel.text}</span>
-      </div>
-      <div class="news-title">${news.title}</div>
-      <div class="news-snippet">${news.snippet}</div>
-      <div class="reliability-bar">
-        <div class="reliability-fill ${relClass}" style="width: ${news.reliability}%"></div>
-      </div>
-      <div class="news-footer">
-        <span class="news-date">${news.date}</span>
-        <span style="font-size:12px;color:var(--text3);font-family:var(--font-mono)">${news.reliability}% confiável</span>
       </div>
     </div>
-  `;
+  </div>`;
 }
 
-function goToScan(encodedTitle) {
-  const title = decodeURIComponent(encodedTitle);
-  sessionStorage.setItem('vf_scan_text', title);
+// ── Dots de navegação ─────────────────────────────────────
+function buildDots() {
+  const dotsEl = document.getElementById('carouselDots');
+  if (!dotsEl) return;
+  dotsEl.innerHTML = carouselNews.slice(0,10).map((_,i) =>
+    `<button class="carousel-dot ${i===0?'active':''}" onclick="carouselGoTo(${i})"></button>`
+  ).join('');
+}
+
+function updateDots(idx) {
+  document.querySelectorAll('.carousel-dot').forEach((d,i) =>
+    d.classList.toggle('active', i === idx % 10)
+  );
+}
+
+// ── Navegação ─────────────────────────────────────────────
+function carouselGoTo(idx, animate) {
+  if (isAnimating) return;
+  const track = document.getElementById('carouselTrack');
+  if (!track || carouselNews.length === 0) return;
+
+  isAnimating = true;
+  const direction = (animate === 'prev') ? -1 : 1;
+
+  // Fade out
+  track.style.opacity = '0';
+  track.style.transform = 'translateX('+(direction * -30)+'px)';
+
+  setTimeout(() => {
+    carouselIdx = ((idx % carouselNews.length) + carouselNews.length) % carouselNews.length;
+    track.innerHTML = renderSlide(carouselNews[carouselIdx], carouselIdx);
+    track.style.transition = 'none';
+    track.style.opacity = '0';
+    track.style.transform = 'translateX('+(direction * 30)+'px)';
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        track.style.transition = 'opacity .4s ease, transform .4s ease';
+        track.style.opacity = '1';
+        track.style.transform = 'translateX(0)';
+        updateDots(carouselIdx);
+        isAnimating = false;
+      });
+    });
+  }, 350);
+
+  resetTimer();
+}
+
+function carouselMove(dir) {
+  carouselGoTo(carouselIdx + dir, dir === -1 ? 'prev' : 'next');
+}
+
+// ── Auto-play ─────────────────────────────────────────────
+function startTimer() {
+  stopTimer();
+  carouselTimer = setInterval(() => carouselGoTo(carouselIdx + 1, 'next'), 5000);
+}
+function stopTimer()  { if (carouselTimer) { clearInterval(carouselTimer); carouselTimer = null; } }
+function resetTimer() { startTimer(); }
+
+// ── Init carrossel ────────────────────────────────────────
+function initCarousel(news) {
+  carouselNews = news;
+  carouselIdx  = 0;
+
+  const track = document.getElementById('carouselTrack');
+  if (!track) return;
+  track.innerHTML  = renderSlide(carouselNews[0], 0);
+  track.style.opacity   = '0';
+  track.style.transform = 'translateY(20px)';
+
+  requestAnimationFrame(() => {
+    track.style.transition = 'opacity .5s ease, transform .5s ease';
+    track.style.opacity    = '1';
+    track.style.transform  = 'translateY(0)';
+  });
+
+  buildDots();
+  startTimer();
+
+  // Pausar ao passar o rato
+  const viewport = document.getElementById('carouselViewport');
+  if (viewport) {
+    viewport.addEventListener('mouseenter', stopTimer);
+    viewport.addEventListener('mouseleave', startTimer);
+    viewport.addEventListener('touchstart', stopTimer, {passive:true});
+    viewport.addEventListener('touchend',   () => setTimeout(startTimer, 3000), {passive:true});
+  }
+
+  // Subtítulo
+  const sub = document.getElementById('newsSubtitle');
+  if (sub) {
+    const now = new Date().toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'});
+    sub.textContent = news.length + ' notícias · Atualizado às ' + now;
+  }
+}
+
+// ── Fetch ─────────────────────────────────────────────────
+async function initNews() {
+  const track = document.getElementById('carouselTrack');
+  if (!track) return;
+
+  try {
+    let raw = getCached();
+    if (!raw) {
+      const r    = await fetch(getProxyUrl(), {signal:AbortSignal.timeout(15000)});
+      const data = await r.json();
+      if (!data.success) throw new Error(data.error||'Erro API');
+      raw = data.articles;
+      setCache(raw);
+    }
+    const valid = raw
+      .filter(a => a.title && a.title!=='[Removed]' && (a.source?.name||'')!=='[Removed]')
+      .map(normalize);
+
+    if (valid.length === 0) throw new Error('Sem artigos disponíveis');
+    initCarousel(valid.slice(0, 20)); // máx 20 no carrossel homepage
+  } catch(e) {
+    console.warn('News error:', e.message);
+    // Fallback com 1 card de erro
+    track.innerHTML = `<div class="carousel-slide">
+      <div class="carousel-card">
+        <div class="carousel-card-img" style="background:linear-gradient(135deg,#1a1a2e,#0f0f1a)">
+          <div class="carousel-card-overlay"></div>
+          <div class="carousel-card-content" style="justify-content:center;text-align:center">
+            <div style="font-size:48px;margin-bottom:12px">📡</div>
+            <div class="carousel-card-title" style="font-size:18px">Notícias temporariamente indisponíveis</div>
+            <div class="carousel-card-snippet">Verifica a tua ligação ou a chave da NewsAPI.</div>
+            <button onclick="refreshNews()" class="carousel-btn-verify" style="margin:16px auto 0">🔄 Tentar novamente</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+}
+
+async function refreshNews() {
+  localStorage.removeItem(NEWS_CACHE_KEY);
+  await initNews();
+}
+
+function goToScan(enc) {
+  sessionStorage.setItem('vf_scan_text', decodeURIComponent(enc));
   window.location.href = 'pages/scan.html';
 }
 
-function loadNews() {
-  const grid = document.getElementById('newsGrid');
-  if (!grid) return;
-
-  const slice = TRENDING_NEWS.slice(newsOffset, newsOffset + NEWS_PER_LOAD);
-  
-  if (newsOffset === 0) {
-    // Remove skeletons
-    grid.innerHTML = '';
-  }
-  
-  slice.forEach((news, i) => {
-    const card = document.createElement('div');
-    card.innerHTML = renderNewsCard(news);
-    card.firstElementChild.style.animationDelay = `${i * 0.1}s`;
-    card.firstElementChild.style.animation = 'fadeUp 0.5s ease both';
-    grid.appendChild(card.firstElementChild);
-  });
-  
-  newsOffset += NEWS_PER_LOAD;
-  
-  const loadMoreBtn = document.getElementById('loadMoreBtn');
-  if (loadMoreBtn && newsOffset >= TRENDING_NEWS.length) {
-    loadMoreBtn.style.display = 'none';
-  }
-}
-
-// Quick scan redirect
+// ── DOMContentLoaded ──────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  setTimeout(loadNews, 600); // Simulate loading
-  
-  const quickBtn = document.getElementById('quickScanBtn');
-  const quickInput = document.getElementById('quickInput');
-  
-  if (quickBtn && quickInput) {
-    const doQuickScan = () => {
-      const val = quickInput.value.trim();
-      if (val) {
-        sessionStorage.setItem('vf_scan_text', val);
-      }
+  initNews();
+
+  // Quick scan bar
+  const qBtn   = document.getElementById('quickScanBtn');
+  const qInput = document.getElementById('quickInput');
+  if (qBtn && qInput) {
+    const go = () => {
+      const v = qInput.value.trim();
+      if (v) sessionStorage.setItem('vf_scan_text', v);
       window.location.href = 'pages/scan.html';
     };
-    quickBtn.addEventListener('click', doQuickScan);
-    quickInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') doQuickScan();
-    });
+    qBtn.addEventListener('click', go);
+    qInput.addEventListener('keypress', e => { if (e.key==='Enter') go(); });
   }
 
-  const loadMoreBtn = document.getElementById('loadMoreBtn');
-  if (loadMoreBtn) {
-    loadMoreBtn.addEventListener('click', loadNews);
-  }
-  
   // Navbar scroll effect
   const navbar = document.getElementById('navbar');
-  window.addEventListener('scroll', () => {
-    if (window.scrollY > 20) {
-      navbar.style.borderBottomColor = 'var(--border2)';
-    } else {
-      navbar.style.borderBottomColor = 'var(--border)';
-    }
-  });
+  if (navbar) {
+    window.addEventListener('scroll', () => {
+      navbar.style.borderBottomColor = window.scrollY>20 ? 'var(--border2)' : 'transparent';
+    });
+  }
 });

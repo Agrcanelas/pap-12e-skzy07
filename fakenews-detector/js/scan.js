@@ -1,892 +1,813 @@
-// ===== scan.js — Verificação real com Google Custom Search =====
+// ============================================================
+//  scan.js — VeriFact: Google Fact Check API + Groq AI
+// ============================================================
 
-// ============================================================
-//  CONFIGURAÇÃO — preenche com as tuas chaves gratuitas
-//  Ver README.md para instruções de como obter
-// ============================================================
-const GOOGLE_API_KEY = 'AIzaSyCGacRbVpHkGQsdhOElmDb6mBcHIBcvYrk';   // Chave da Google Custom Search API
-const GOOGLE_CX      = '563bcb6c551524980'; 
+const GROQ_API_KEY  = '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';
+const GROQ_URL      = 'https://api.groq.com/openai/v1/chat/completions';
+const GROQ_MODEL    = 'llama-3.3-70b-versatile';
+const FACTCHECK_KEY = 'AIzaSyCUQZ5pI7bhQL8dwIxgPD8KfofnbF6ZNLc';
+const FACTCHECK_URL = 'https://factchecktools.googleapis.com/v1alpha1/claims:search';
 
-// ============================================================
-//  FONTES CREDENCIADAS
-// ============================================================
-const CREDIBLE_SOURCES = {
-  factcheck: [
-    { domain: 'poligrafo.sapo.pt',      name: 'Polígrafo',        weight: 10 },
-    { domain: 'snopes.com',             name: 'Snopes',           weight: 10 },
-    { domain: 'reuters.com/fact-check', name: 'Reuters FC',       weight: 10 },
-    { domain: 'factcheck.org',          name: 'FactCheck.org',    weight: 10 },
-    { domain: 'politifact.com',         name: 'PolitiFact',       weight: 9  },
-    { domain: 'apnews.com',             name: 'AP Fact Check',    weight: 9  },
-    { domain: 'observador.pt/factcheck',name: 'Observador FC',    weight: 9  },
-  ],
-  portuguese: [
-    { domain: 'publico.pt',             name: 'Público',          weight: 8  },
-    { domain: 'observador.pt',          name: 'Observador',       weight: 8  },
-    { domain: 'dn.pt',                  name: 'Diário de Notícias',weight: 7 },
-    { domain: 'jn.pt',                  name: 'Jornal de Notícias',weight: 7 },
-    { domain: 'rtp.pt',                 name: 'RTP',              weight: 8  },
-    { domain: 'tsf.pt',                 name: 'TSF',              weight: 7  },
-    { domain: 'cmjornal.pt',            name: 'Correio da Manhã', weight: 6  },
-  ],
-  international: [
-    { domain: 'bbc.com',                name: 'BBC',              weight: 9  },
-    { domain: 'bbc.co.uk',             name: 'BBC UK',           weight: 9  },
-    { domain: 'cnn.com',                name: 'CNN',              weight: 7  },
-    { domain: 'apnews.com',            name: 'AP News',          weight: 9  },
-    { domain: 'reuters.com',           name: 'Reuters',          weight: 9  },
-    { domain: 'theguardian.com',       name: 'The Guardian',     weight: 8  },
-    { domain: 'nytimes.com',           name: 'NY Times',         weight: 8  },
-  ],
-  wiki: [
-    { domain: 'wikipedia.org',         name: 'Wikipedia',        weight: 6  },
-    { domain: 'pt.wikipedia.org',      name: 'Wikipedia PT',     weight: 6  },
-    { domain: 'en.wikipedia.org',      name: 'Wikipedia EN',     weight: 6  },
-  ]
-};
-
-const ALL_SOURCES = [
-  ...CREDIBLE_SOURCES.factcheck,
-  ...CREDIBLE_SOURCES.portuguese,
-  ...CREDIBLE_SOURCES.international,
-  ...CREDIBLE_SOURCES.wiki,
-];
-
-// ============================================================
 let currentMode = 'text';
 let lastResult  = null;
 
-// ---- TAB SWITCHING ----
+// ── Toast ──────────────────────────────────────────────────
+function showToast(msg, type) {
+  let t = document.getElementById('toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'toast';
+    t.style.cssText = 'position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:10px;font-size:14px;font-weight:600;z-index:9999;pointer-events:none;transition:opacity .4s,transform .4s;opacity:0;transform:translateY(20px)';
+    document.body.appendChild(t);
+  }
+  const bg = type==='success'?'#00c47a':type==='error'?'#ff3366':type==='warning'?'#f59e0b':'#00d4ff';
+  t.style.background=bg; t.style.color='#000'; t.textContent=msg;
+  t.style.opacity='1'; t.style.transform='translateY(0)';
+  clearTimeout(t._to);
+  t._to = setTimeout(()=>{ t.style.opacity='0'; t.style.transform='translateY(20px)'; }, 4000);
+}
+
+// ── Tab ────────────────────────────────────────────────────
 function switchTab(mode) {
   currentMode = mode;
-  document.getElementById('tabText').classList.toggle('active', mode === 'text');
-  document.getElementById('tabUrl').classList.toggle('active',  mode === 'url');
-  document.getElementById('panelText').style.display = mode === 'text' ? 'block' : 'none';
-  document.getElementById('panelUrl').style.display  = mode === 'url'  ? 'block' : 'none';
+  document.getElementById('tabText').classList.toggle('active', mode==='text');
+  document.getElementById('tabUrl').classList.toggle('active',  mode==='url');
+  document.getElementById('panelText').style.display = mode==='text'?'block':'none';
+  document.getElementById('panelUrl').style.display  = mode==='url' ?'block':'none';
 }
 
-// ---- PROGRESS ----
-function setStep(index, status, statusText) {
-  const el = document.getElementById(`step-${index}`);
+// ── Progress ───────────────────────────────────────────────
+function setStep(i, status, text) {
+  const el = document.getElementById('step-'+i);
   if (!el) return;
-  el.className = `step-item ${status}`;
-  const s = el.querySelector('.step-status');
-  if (s) s.textContent = statusText || '';
-  const dot = el.querySelector('.step-dot');
-  const icons = ['📥','🔍','📰','⚖️','🧠','📄'];
-  if (dot) {
-    if (status === 'done')       dot.textContent = '✓';
-    else if (status === 'error') dot.textContent = '✗';
-    else                         dot.textContent = icons[index] || '●';
-  }
+  el.className = 'step-item '+status;
+  const s = el.querySelector('.step-status'); if (s) s.textContent = text||'';
+  const d = el.querySelector('.step-dot');
+  if (d) d.textContent = status==='done'?'✓':status==='error'?'✗':['📥','🤖','🌐','🔍','⚖️','📄'][i]||'●';
 }
-
-function setProgress(pct, status) {
-  const fill  = document.getElementById('progressFill');
-  const pctEl = document.getElementById('progressPct');
-  const statEl= document.getElementById('progressStatus');
-  if (fill)   fill.style.width = pct + '%';
-  if (pctEl)  pctEl.textContent = pct + '%';
-  if (statEl && status) statEl.textContent = status;
+function setProgress(pct, text) {
+  const f = document.getElementById('progressFill');      if (f) f.style.width = pct+'%';
+  const s = document.getElementById('progressStatus');    if (s) s.textContent = text||'';
+  const p = document.getElementById('progressPct');       if (p) p.textContent = pct+'%';
 }
+function sleep(ms) { return new Promise(r=>setTimeout(r,ms)); }
 
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-// ============================================================
-//  EXTRAIR PALAVRAS-CHAVE
-// ============================================================
-function extractKeywords(text) {
-  const stopwords = new Set([
-    'de','a','o','e','é','em','um','uma','para','com','não','que','se','na','no',
-    'os','as','do','da','dos','das','ao','à','ou','mas','por','mais','já','foi',
-    'the','an','is','are','was','were','in','on','at','to','of','and','or',
-    'that','this','it','he','she','they','we','you','i','be','been','have','has',
-    'said','says','will','would','could','should','may','might','also','been'
-  ]);
-
-  const words = text
-    .replace(/[^\w\sáàãâéêíóôõúçñü]/gi, ' ')
-    .split(/\s+/)
-    .filter(w => w.length > 3 && !stopwords.has(w.toLowerCase()))
-    .slice(0, 12);
-
-  // Entidades (nomes próprios)
-  const entities = text.match(/[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ][a-záàãâéêíóôõúç]+(?:\s+[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ][a-záàãâéêíóôõúç]+)*/g) || [];
-  const topEntities = [...new Set(entities)].slice(0, 5);
-
-  const combined = [...topEntities, ...words.filter(w =>
-    !topEntities.some(e => e.toLowerCase().includes(w.toLowerCase()))
-  )];
-
-  return combined.slice(0, 8).join(' ');
-}
-
-// ============================================================
-//  GOOGLE CUSTOM SEARCH
-// ============================================================
-async function googleSearch(query, numResults = 10) {
-  if (!GOOGLE_API_KEY || !GOOGLE_CX) throw new Error('NO_API_KEY');
-
-  const url = new URL('https://www.googleapis.com/customsearch/v1');
-  url.searchParams.set('key', GOOGLE_API_KEY);
-  url.searchParams.set('cx',  GOOGLE_CX);
-  url.searchParams.set('q',   query);
-  url.searchParams.set('num', numResults);
-
-  const res = await fetch(url.toString());
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `Google API erro ${res.status}`);
-  }
-  const data = await res.json();
-  return data.items || [];
-}
-
-// ============================================================
-//  BRAVE SEARCH API (2000/mês grátis — https://api.search.brave.com/)
-// ============================================================
-const BRAVE_API_KEY = ''; // opcional
-
-async function braveSearch(query) {
-  if (!BRAVE_API_KEY) return [];
-  try {
-    const res = await fetch(
-      `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=10`,
-      { headers: { 'Accept': 'application/json', 'X-Subscription-Token': BRAVE_API_KEY } }
-    );
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (data.web?.results || []).map(r => ({ title: r.title, link: r.url, snippet: r.description || '' }));
-  } catch (e) { return []; }
-}
-
-// ============================================================
-//  WIKIPEDIA API — sem chave, sem CORS, sempre funciona
-// ============================================================
-async function wikipediaSearch(query) {
-  const results = [];
-  try {
-    // PT
-    const resPt = await fetch(`https://pt.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&utf8=&format=json&origin=*&srlimit=6`);
-    const dataPt = await resPt.json();
-    (dataPt.query?.search || []).forEach(r => results.push({
-      title:   r.title,
-      link:    `https://pt.wikipedia.org/wiki/${encodeURIComponent(r.title.replace(/ /g,'_'))}`,
-      snippet: r.snippet?.replace(/<[^>]*>/g, '') || '',
-    }));
-  } catch(e) {}
-  try {
-    // EN
-    const resEn = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&utf8=&format=json&origin=*&srlimit=6`);
-    const dataEn = await resEn.json();
-    (dataEn.query?.search || []).forEach(r => results.push({
-      title:   r.title,
-      link:    `https://en.wikipedia.org/wiki/${encodeURIComponent(r.title.replace(/ /g,'_'))}`,
-      snippet: r.snippet?.replace(/<[^>]*>/g, '') || '',
-    }));
-  } catch(e) {}
-  return results;
-}
-
-// ============================================================
-//  NEWSAPI.ORG — chave gratuita em newsapi.org/register
-// ============================================================
-const NEWS_API_KEY = ''; // opcional
-
-async function newsApiSearch(query) {
-  if (!NEWS_API_KEY) return [];
-  try {
-    const res = await fetch(
-      `https://newsapi.org/v2/everything?q=${encodeURIComponent(query)}&language=pt&pageSize=8&sortBy=relevancy&apiKey=${NEWS_API_KEY}`
-    );
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (data.articles || []).map(a => ({ title: a.title, link: a.url, snippet: a.description || '' }));
-  } catch (e) { return []; }
-}
-
-// ============================================================
-//  PESQUISA COMBINADA — usa todas as APIs disponíveis
-//  Sem nenhuma chave: usa Wikipedia (sempre funciona)
-//  Com Google ou Brave: muito mais preciso
-// ============================================================
-async function multiSearch(query, keywords) {
-  const results = [];
-
-  // 1. Google (melhor — 100/dia grátis)
-  if (GOOGLE_API_KEY && GOOGLE_CX) {
-    try {
-      const r = await googleSearch(query, 10);
-      r.forEach(i => { if (!results.find(x => x.link === i.link)) results.push(i); });
-    } catch(e) { console.warn('Google falhou:', e.message); }
-  }
-
-  // 2. Brave (2000/mês grátis)
-  if (BRAVE_API_KEY) {
-    try {
-      const r = await braveSearch(keywords);
-      r.forEach(i => { if (!results.find(x => x.link === i.link)) results.push(i); });
-    } catch(e) {}
-  }
-
-  // 3. NewsAPI (se tiver chave)
-  if (NEWS_API_KEY) {
-    try {
-      const r = await newsApiSearch(keywords);
-      r.forEach(i => { if (!results.find(x => x.link === i.link)) results.push(i); });
-    } catch(e) {}
-  }
-
-  // 4. Wikipedia — SEMPRE corre (sem chave, sem CORS)
-  try {
-    const wiki = await wikipediaSearch(keywords);
-    wiki.forEach(i => { if (!results.find(x => x.link === i.link)) results.push(i); });
-  } catch(e) {}
-
-  return results;
-}
-
-// ============================================================
-//  ANALISAR RESULTADOS DA PESQUISA
-//  Lógica melhorada: verifica se os resultados CONFIRMAM
-//  especificamente o que foi escrito, não apenas se mencionam
-//  os mesmos tópicos
-// ============================================================
-function extractClaimsFromText(text) {
-  // Extrair datas/anos mencionados na notícia
-  const years   = text.match(/\b(20\d{2}|19\d{2})\b/g) || [];
-  // Extrair verbos de ação (morreu, ganhou, foi eleito, etc.)
-  const actions = text.match(/\b(morreu|morte|faleceu|ganhou|perdeu|foi eleito|venceu|nomeado|renunciou|demitiu|divorciou|casou|preso|condenado|absolvido|voltou|regressou|eleito|nomeado|inaugurou|lançou|descobriu|anunciou|revelou)\b/gi) || [];
-  // Extrair entidades principais (primeiras 3 palavras maiúsculas)
-  const entities = [...new Set(text.match(/[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ][a-záàãâéêíóôõúç]+(?:\s+[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ][a-záàãâéêíóôõúç]+)*/g) || [])].slice(0, 4);
-  return { years, actions: actions.map(a => a.toLowerCase()), entities };
-}
-
-function scoreResultRelevance(itemText, claims) {
-  let score = 0;
-  const text = itemText.toLowerCase();
-
-  // Verificar se o resultado menciona a ação específica
-  claims.actions.forEach(action => {
-    if (text.includes(action)) score += 3;
-  });
-
-  // Verificar se menciona os anos específicos
-  claims.years.forEach(year => {
-    if (text.includes(year)) score += 2;
-  });
-
-  // Verificar entidades
-  claims.entities.forEach(entity => {
-    if (text.includes(entity.toLowerCase())) score += 1;
-  });
-
-  return score;
-}
-
-function analyseSearchResults(results, originalText) {
-  const findings      = [];
-  let confirmScore    = 0;
-  let denyScore       = 0;
-  let factCheckFound  = false;
-  let factCheckVerdict = null;
-
-  // Extrair os factos específicos que estão a ser verificados
-  const claims = extractClaimsFromText(originalText || '');
-
-  const fakeWords = [
-    'falso','fake','false','desinformação','misinformation','mentira',
-    'não é verdade','não é real','boato','hoax','rumor','manipulado',
-    'desmentido','refutado','debunked','misleading','enganoso',
-    'incorreto','satira','sátira','paródia','fabricado','fabricated',
-    'nunca aconteceu','não existe','não ocorreu','sem evidências',
-    'no evidence','unverified','unconfirmed','não confirmado'
-  ];
-
-  const trueWords = [
-    'confirmado','confirmed','verdadeiro','verified',
-    'comprovado','aconteceu','ocorreu','anunciou','declarou',
-    'de acordo com fontes','notícia confirmada','breaking','official'
-  ];
-
-  // Palavras que indicam que o resultado é sobre o TÓPICO GERAL
-  // mas NÃO confirma o facto específico
-  const topicOnlyWords = [
-    'história','biography','born','nascido','carreira','former','ex-',
-    'anteriormente','previously','was','era','served as','serviu como'
-  ];
-
-  for (const item of results) {
-    const url      = (item.link    || '').toLowerCase();
-    const title    = (item.title   || '').toLowerCase();
-    const snippet  = (item.snippet || '').toLowerCase();
-    const fullText = title + ' ' + snippet;
-
-    // Encontrar fonte
-    const source      = ALL_SOURCES.find(s => url.includes(s.domain)) ||
-                        ALL_SOURCES.find(s => url.includes(s.domain.replace('pt.','').replace('en.','')));
-    const weight      = source ? source.weight : 3;
-    const sourceName  = source ? source.name : extractDomain(item.link || '');
-    const isFactCheck = CREDIBLE_SOURCES.factcheck.some(s => url.includes(s.domain));
-
-    const hasFakeWord  = fakeWords.some(w => fullText.includes(w));
-    const hasTrueWord  = trueWords.some(w => fullText.includes(w));
-    const isTopicOnly  = !hasFakeWord && !hasTrueWord && topicOnlyWords.some(w => fullText.includes(w));
-
-    // Relevância: quão específico é este resultado para o facto verificado
-    const relevanceScore = scoreResultRelevance(fullText, claims);
-    const isRelevant     = relevanceScore >= 2;
-
-    if (isFactCheck) {
-      factCheckFound = true;
-      if (hasFakeWord) {
-        denyScore += weight * 2.5;
-        factCheckVerdict = 'fake';
-      } else if (hasTrueWord && isRelevant) {
-        confirmScore += weight * 2;
-        factCheckVerdict = 'real';
-      }
-      // Fact-checker encontrado mas sem palavras claras = suspeito
-    } else {
-      if (hasFakeWord) {
-        denyScore += weight;
-      } else if (hasTrueWord && isRelevant) {
-        // Só conta como confirmação se for relevante ao facto específico
-        confirmScore += weight * 0.8;
-      } else if (isTopicOnly || !isRelevant) {
-        // Resultado sobre o tópico geral mas NÃO confirma o facto
-        // NÃO adiciona pontos de confirmação — era aqui o bug!
-        denyScore += 0.5; // ligeira penalização: o facto não aparece confirmado
-      }
-    }
-
-    findings.push({
-      title:         item.title   || '(sem título)',
-      url:           item.link    || '#',
-      snippet:       item.snippet || '',
-      domain:        sourceName,
-      isCredible:    !!source,
-      isFactChecker: isFactCheck,
-      hasFakeWord,
-      hasTrueWord,
-      isRelevant,
-      relevanceScore,
-      weight,
-    });
-  }
-
-  return { findings, confirmScore, denyScore, factCheckFound, factCheckVerdict, claims };
-}
-
-function extractDomain(url) {
-  try { return new URL(url).hostname.replace('www.',''); } catch { return url; }
-}
-
-// ============================================================
-//  DETERMINAR VEREDICTO — lógica melhorada
-// ============================================================
-function determineVerdict(analysis, numResults, originalText) {
-  const { confirmScore, denyScore, factCheckFound, factCheckVerdict, findings, claims } = analysis;
-  const total = confirmScore + denyScore;
-  let verdict, reliability, confidence, summary;
-
-  // Contar resultados verdadeiramente relevantes
-  const relevantResults   = findings.filter(f => f.isRelevant).length;
-  const credibleRelevant  = findings.filter(f => f.isCredible && f.isRelevant).length;
-  const contradictions    = findings.filter(f => f.hasFakeWord).length;
-  const confirmations     = findings.filter(f => f.hasTrueWord && f.isRelevant).length;
-
-  if (factCheckFound && factCheckVerdict === 'fake') {
-    // Fact-checker específico diz que é falso
-    verdict     = 'fake';
-    reliability = Math.round(5 + Math.random() * 12);
-    confidence  = 94;
-    summary     = `Sites especializados em fact-checking identificaram esta informação como FALSA. ${contradictions} fonte(s) credenciada(s) contradizem diretamente esta notícia.`;
-
-  } else if (factCheckFound && factCheckVerdict === 'real') {
-    verdict     = 'real';
-    reliability = Math.round(78 + Math.random() * 16);
-    confidence  = 88;
-    summary     = `Fact-checkers credenciados confirmaram esta informação. Encontrada em ${credibleRelevant} fonte(s) de confiança com relevância direta.`;
-
-  } else if (numResults === 0 || relevantResults === 0) {
-    // Nenhum resultado relevante = muito suspeito
-    // Um facto verdadeiro e importante teria cobertura mediática
-    verdict     = 'suspicious';
-    reliability = 18;
-    confidence  = 72;
-    summary     = `Não foi encontrada nenhuma cobertura mediática credenciada que confirme esta informação. Factos verdadeiros e relevantes são normalmente noticiados por múltiplos meios de comunicação.`;
-
-  } else if (confirmScore === 0 && denyScore > 0) {
-    verdict     = 'fake';
-    reliability = Math.round(8 + Math.random() * 14);
-    confidence  = Math.round(70 + contradictions * 5);
-    summary     = `Nenhuma fonte credenciada confirma este facto específico e ${contradictions} fonte(s) contradizem-no diretamente.`;
-
-  } else if (confirmScore === 0 && total === 0) {
-    // Há resultados mas nenhum confirma nem nega o facto específico
-    verdict     = 'suspicious';
-    reliability = 25;
-    confidence  = 65;
-    summary     = `Foram encontrados ${numResults} resultados sobre o tema mas nenhum confirma o facto específico mencionado. A ausência de confirmação em fontes credenciadas é um sinal de alerta.`;
-
-  } else if (total > 0) {
-    const ratio = confirmScore / total;
-
-    if (denyScore > confirmScore) {
-      verdict     = 'fake';
-      reliability = Math.round(8 + (1 - ratio) * 20);
-      confidence  = Math.round(62 + (denyScore / total) * 28);
-      summary     = `As fontes credenciadas contradizem esta informação (${contradictions} contra ${confirmations} confirmações). O facto específico não está documentado como verdadeiro.`;
-
-    } else if (confirmScore > denyScore && confirmations >= 2) {
-      verdict     = 'real';
-      reliability = Math.round(60 + ratio * 35);
-      confidence  = Math.round(60 + ratio * 30);
-      summary     = `A informação foi confirmada por ${confirmations} fonte(s) credenciada(s) com relevância direta para o facto verificado.`;
-
-    } else {
-      verdict     = 'suspicious';
-      reliability = Math.round(28 + ratio * 20);
-      confidence  = Math.round(50 + Math.abs(confirmScore - denyScore) / (total || 1) * 20);
-      summary     = `Os resultados são inconclusivos. Foram encontradas ${numResults} referências mas apenas ${credibleRelevant} são diretamente relevantes ao facto verificado. Recomenda-se verificação adicional.`;
-    }
-  } else {
-    verdict     = 'suspicious';
-    reliability = 30;
-    confidence  = 50;
-    summary     = `Não foi possível determinar a veracidade desta informação com certeza suficiente. Verifica em fontes credenciadas antes de partilhar.`;
-  }
-
-  return {
-    verdict,
-    reliability: Math.min(97, Math.max(3,  reliability)),
-    confidence:  Math.min(95, Math.max(45, confidence)),
-    summary,
-  };
-}
-
-// ============================================================
-//  FETCH URL CONTENT
-// ============================================================
+// ── Obter conteúdo de URL ──────────────────────────────────
 async function fetchUrlContent(url) {
-  try {
-    const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-    const res   = await fetch(proxy);
-    const data  = await res.json();
-    if (!data.contents) throw new Error('Sem conteúdo');
-    const tmp   = document.createElement('div');
-    tmp.innerHTML = data.contents;
-    const art   = tmp.querySelector('article') || tmp.querySelector('main') || tmp;
-    const text  = (art.innerText || art.textContent || '').replace(/\s+/g,' ').trim().substring(0, 3000);
-    if (text.length < 50) throw new Error('Conteúdo insuficiente');
-    return text;
-  } catch (e) {
-    throw new Error('Não foi possível aceder ao URL. Tenta colar o texto diretamente.');
-  }
-}
-
-// ============================================================
-//  CONSTRUIR RESULTADO
-// ============================================================
-function buildResult(verdictData, analysis, searchResults, keywords) {
-  const { verdict, reliability, confidence, summary } = verdictData;
-  const { findings, factCheckFound, factCheckVerdict } = analysis;
-
-  const verdictMap = {
-    fake:       { text: 'FALSO',      icon: '❌' },
-    real:       { text: 'VERDADEIRO', icon: '✅' },
-    suspicious: { text: 'SUSPEITO',   icon: '⚠️' },
-  };
-
-  const indicators = [
-    { name: 'Fontes encontradas',  value: `${searchResults.length}`,                                                         type: searchResults.length > 3 ? 'positive' : searchResults.length > 0 ? 'neutral' : 'negative' },
-    { name: 'Fontes credíveis',    value: `${findings.filter(f=>f.isCredible).length}`,                                      type: findings.filter(f=>f.isCredible).length > 2 ? 'positive' : 'neutral' },
-    { name: 'Fact-checkers',       value: factCheckFound ? (factCheckVerdict === 'fake' ? '✗ Falso' : '✓ Real') : 'Nenhum', type: factCheckFound ? (factCheckVerdict === 'fake' ? 'negative' : 'positive') : 'neutral' },
-    { name: 'Confirmações',        value: `${findings.filter(f=>f.hasTrueWord).length} fontes`,                              type: findings.filter(f=>f.hasTrueWord).length > 2 ? 'positive' : 'neutral' },
-    { name: 'Contradições',        value: `${findings.filter(f=>f.hasFakeWord).length} fontes`,                              type: findings.filter(f=>f.hasFakeWord).length > 0 ? 'negative' : 'positive' },
-    { name: 'Cobertura mediática', value: searchResults.length > 5 ? 'Alta' : searchResults.length > 2 ? 'Média' : 'Baixa', type: searchResults.length > 5 ? 'positive' : searchResults.length > 2 ? 'neutral' : 'negative' },
+  const proxies = [
+    'https://api.allorigins.win/get?url='+encodeURIComponent(url),
+    'https://corsproxy.io/?'+encodeURIComponent(url),
   ];
-
-  const sources = findings.slice(0, 8).map(f => ({
-    name:          f.domain,
-    url:           f.url,
-    title:         f.title,
-    snippet:       f.snippet,
-    status:        f.hasFakeWord ? 'fake' : f.hasTrueWord ? 'credible' : 'neutral',
-    label:         f.hasFakeWord ? '✗ Contradiz' : f.hasTrueWord ? '✓ Confirma' : '— Menciona',
-    isFactChecker: f.isFactChecker,
-  }));
-
-  let realNews = null;
-  if (verdict === 'fake' || verdict === 'suspicious') {
-    const correctSources = findings.filter(f => f.isCredible && !f.hasFakeWord).slice(0, 3);
-    realNews = {
-      title: correctSources.length > 0 ? 'Informação credenciada sobre este tema:' : 'Verifica nestas fontes credenciadas:',
-      items: correctSources.length > 0
-        ? correctSources.map(s => ({ name: s.domain, url: s.url, snippet: (s.snippet||'').substring(0,120) + '...' }))
-        : [
-            { name: 'Polígrafo',         url: `https://poligrafo.sapo.pt`,                                                snippet: 'Fact-checker português independente' },
-            { name: 'Reuters Fact Check',url: `https://www.reuters.com/fact-check`,                                       snippet: 'Verificação de factos da Reuters' },
-            { name: 'Snopes',            url: `https://snopes.com/search?q=${encodeURIComponent(keywords)}`,             snippet: 'Base de dados de fact-checking' },
-          ]
-    };
+  for (const proxy of proxies) {
+    try {
+      const r = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
+      if (!r.ok) continue;
+      const json = await r.json().catch(()=>null);
+      const html = json?.contents || await r.text();
+      const div  = document.createElement('div');
+      div.innerHTML = html;
+      ['script','style','nav','footer','header','aside'].forEach(tag=>
+        div.querySelectorAll(tag).forEach(el=>el.remove()));
+      const clean = (div.innerText||div.textContent||'').replace(/\s+/g,' ').trim().slice(0,3000);
+      if (clean.length > 100) return clean;
+    } catch {}
   }
-
-  return { verdict, verdictText: verdictMap[verdict].text, verdictIcon: verdictMap[verdict].icon, reliability, confidence, summary, indicators, sources, realNews, keywords };
+  throw new Error('Não foi possível obter o conteúdo do URL. Cola o texto diretamente.');
 }
 
-// ============================================================
-//  FUNÇÃO PRINCIPAL
-// ============================================================
-async function runScan() {
-  let inputText = '';
+// ── PASSO 1: Validar se é notícia ─────────────────────────
+async function validateIsNews(text) {
+  const prompt = `Analisa este texto e responde APENAS com JSON válido sem markdown.
 
-  if (currentMode === 'text') {
-    inputText = document.getElementById('newsText').value.trim();
-    if (!inputText || inputText.length < 15) {
-      showToast('Por favor insere um texto com pelo menos 15 caracteres.', 'error'); return;
-    }
-  } else {
-    const url = document.getElementById('newsUrl').value.trim();
-    if (!url || !url.startsWith('http')) {
-      showToast('Por favor insere um URL válido.', 'error'); return;
-    }
-    inputText = url;
-  }
+Texto: "${text.slice(0,500)}"
 
-  document.getElementById('resultSection').classList.remove('active');
-  document.getElementById('progressSection').classList.add('active');
-  document.getElementById('scanBtn').disabled = true;
+Responde:
+{"is_news":true ou false,"reason":"motivo em 1 frase","topic":"tema em 3 palavras","language":"pt/en/outro"}
 
-  for (let i = 0; i < 6; i++) setStep(i, '', '—');
-  setProgress(0, 'A iniciar...');
-
-  let analysisText  = inputText;
-  let searchResults = [];
+É notícia/afirmação factual se: descreve evento real ou alegado, contém afirmação verificável, parece titular ou post sobre algo acontecido.
+NÃO é notícia se: é ficção óbvia, poesia, código, receita, texto sem sentido ("aaa","hello","teste"), pergunta genérica sem afirmação.`;
 
   try {
-    // STEP 0 — Obter conteúdo
-    setStep(0, 'active', 'A processar...');
-    setProgress(8, 'A obter conteúdo...');
-    if (currentMode === 'url') {
-      try {
-        analysisText = await fetchUrlContent(inputText);
-        setStep(0, 'done', '✓ OK');
-      } catch (e) {
-        setStep(0, 'error', '✗ Erro');
-        showToast(e.message, 'error');
-        document.getElementById('progressSection').classList.remove('active');
-        document.getElementById('scanBtn').disabled = false;
-        return;
-      }
-    } else {
-      await sleep(300);
-      setStep(0, 'done', '✓ OK');
-    }
-    setProgress(16, 'Conteúdo pronto');
-
-    // STEP 1 — Extrair palavras-chave
-    setStep(1, 'active', 'A extrair...');
-    setProgress(24, 'A identificar factos-chave...');
-    await sleep(300);
-    const keywords = extractKeywords(analysisText);
-    setStep(1, 'done', `✓ "${keywords.substring(0,28)}..."`);
-    setProgress(32, `Palavras-chave identificadas`);
-
-    // STEP 2 — Pesquisar em fontes credenciadas
-    setStep(2, 'active', 'A pesquisar...');
-    setProgress(40, 'A pesquisar em fontes credenciadas...');
-    const searchQuery = keywords + ' fact check notícia';
-
-    try {
-      searchResults = await multiSearch(searchQuery, keywords);
-      const src = GOOGLE_API_KEY ? 'Google' : BRAVE_API_KEY ? 'Brave' : 'Wikipedia';
-      setStep(2, 'done', `✓ ${searchResults.length} resultados (${src})`);
-      if (!GOOGLE_API_KEY && !BRAVE_API_KEY) {
-        showToast('💡 Configura a Google API ou Brave API para resultados mais precisos.', 'info');
-      }
-    } catch (e) {
-      showToast(`Erro na pesquisa: ${e.message}`, 'error');
-      searchResults = await wikipediaSearch(keywords);
-      setStep(2, 'done', `✓ ${searchResults.length} resultados Wikipedia`);
-    }
-    setProgress(58, `${searchResults.length} fontes encontradas`);
-
-    // STEP 3 — Analisar resultados
-    setStep(3, 'active', 'A analisar...');
-    setProgress(68, 'A cruzar informação com fontes...');
-    await sleep(500);
-    const analysis = analyseSearchResults(searchResults, analysisText);
-    setStep(3, 'done', `✓ ${analysis.findings.filter(f=>f.isCredible).length} fontes credíveis`);
-    setProgress(77, 'Fontes analisadas');
-
-    // STEP 4 — Veredicto
-    setStep(4, 'active', 'A calcular...');
-    setProgress(86, 'A determinar veredicto...');
-    await sleep(400);
-    const verdictData = determineVerdict(analysis, searchResults.length, analysisText);
-    const result      = buildResult(verdictData, analysis, searchResults, keywords);
-    setStep(4, 'done', '✓ OK');
-    setProgress(93, 'Veredicto determinado');
-
-    // STEP 5 — Gerar relatório
-    setStep(5, 'active', 'A preparar...');
-    setProgress(97, 'A preparar relatório...');
-
-    // Guardar na DB
-    let savedScanId = null;
-    if (typeof Scans !== 'undefined') {
-      try {
-        const saveRes = await Scans.save({
-          input_type: currentMode, input_content: analysisText,
-          verdict: result.verdict, reliability: result.reliability,
-          confidence: result.confidence, fake_score: 100 - result.reliability,
-          summary: result.summary, indicators: result.indicators,
-          sources: result.sources, real_news: result.realNews,
-        });
-        if (saveRes?.success) savedScanId = saveRes.data.scan_id;
-      } catch (e) { console.warn('DB save failed:', e); }
-    }
-
-    lastResult = { ...result, inputText: analysisText, inputMode: currentMode, timestamp: new Date(), keywords, searchResults, scanId: savedScanId };
-
-    setStep(5, 'done', '✓ Pronto');
-    setProgress(100, 'Concluído!');
-    await sleep(300);
-
-    document.getElementById('progressSection').classList.remove('active');
-    renderResult(result);
-
-  } catch (err) {
-    console.error('Scan error:', err);
-    showToast('Erro durante a análise: ' + err.message, 'error');
-    document.getElementById('progressSection').classList.remove('active');
+    const r = await fetch(GROQ_URL, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+GROQ_API_KEY},
+      body: JSON.stringify({ model:GROQ_MODEL, max_tokens:120, temperature:0,
+        messages:[{role:'user',content:prompt}] })
+    });
+    const data = await r.json();
+    const raw  = (data.choices?.[0]?.message?.content||'{}').replace(/```json|```/g,'').trim();
+    return JSON.parse(raw);
+  } catch {
+    return { is_news:true, reason:'Validação indisponível', topic:'', language:'pt' };
   }
+}
 
+// ── PASSO 2: Google Fact Check API ────────────────────────
+async function searchFactCheck(query) {
+  try {
+    // Tentar em português primeiro, depois inglês
+    const tryLang = async (lang) => {
+      const url = FACTCHECK_URL+'?key='+FACTCHECK_KEY
+        +'&query='+encodeURIComponent(query.slice(0,200))
+        +'&languageCode='+lang+'&pageSize=5';
+      const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (!r.ok) return [];
+      const data = await r.json();
+      return (data.claims||[]).map(c=>({
+        text:      c.text||'',
+        claimant:  c.claimant||'',
+        rating:    c.claimReview?.[0]?.textualRating||'',
+        url:       c.claimReview?.[0]?.url||'',
+        publisher: c.claimReview?.[0]?.publisher?.name||'',
+      }));
+    };
+    const pt = await tryLang('pt');
+    if (pt.length > 0) return pt;
+    return await tryLang('en');
+  } catch { return []; }
+}
+
+// ── PASSO 3: Groq análise final ───────────────────────────
+async function analyzeWithGroq(text, factChecks) {
+  const fcContext = factChecks.length > 0
+    ? '\n\nVERIFICAÇÕES REAIS ENCONTRADAS:\n' + factChecks.map((f,i)=>
+        '['+(i+1)+'] "'+f.text.slice(0,150)+'"\n  Veredicto: '+f.rating+' | Fonte: '+f.publisher).join('\n')
+    : '\n\nNota: Não há verificações anteriores desta notícia em bases de dados de fact-checking.';
+
+  const prompt = `És um verificador de factos rigoroso português. Analisa a notícia abaixo.
+
+NOTÍCIA: "${text.slice(0,1500)}"
+${fcContext}
+
+REGRAS:
+- Se há fact-checks, dá muito peso a esses veredictos oficiais
+- Analisa linguagem alarmista, contradições, ausência de fontes
+- Se não tens certeza, usa "suspicious"
+- Responde APENAS em JSON válido sem markdown:
+
+{"verdict":"fake"/"real"/"suspicious","reliability":0-100,"confidence":0-100,"summary":"análise em 2-3 frases em português","what_is_true":"o que é verdade ou vazio","verdict_reason":"razão em 1 frase","indicators":["indicador1","indicador2","indicador3"]}`;
+
+  const r = await fetch(GROQ_URL, {
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+GROQ_API_KEY},
+    body: JSON.stringify({ model:GROQ_MODEL, max_tokens:600, temperature:0.1,
+      messages:[{role:'user',content:prompt}] })
+  });
+  if (!r.ok) throw new Error('Erro Groq ('+r.status+'). Verifica a chave API.');
+  const data = await r.json();
+  if (data.error) throw new Error('Groq: '+data.error.message);
+  const raw = (data.choices?.[0]?.message?.content||'{}').replace(/```json|```/g,'').trim();
+  try {
+    const p = JSON.parse(raw);
+    return {
+      verdict:        ['fake','real','suspicious'].includes(p.verdict)?p.verdict:'suspicious',
+      reliability:    Math.min(99,Math.max(1,p.reliability||50)),
+      confidence:     Math.min(99,Math.max(20,p.confidence||50)),
+      summary:        p.summary||'Análise concluída.',
+      what_is_true:   p.what_is_true||'',
+      verdict_reason: p.verdict_reason||'',
+      indicators:     Array.isArray(p.indicators)?p.indicators:[],
+    };
+  } catch { throw new Error('Resposta da IA inválida. Tenta novamente.'); }
+}
+
+// ── Helpers de UI ──────────────────────────────────────────
+const verdictLabel = v => v==='fake'?'FALSO':v==='real'?'VERDADEIRO':'SUSPEITO';
+const verdictColor = v => v==='fake'?'#ff3366':v==='real'?'#00f5a0':'#ffd700';
+const verdictEmoji = v => v==='fake'?'❌':v==='real'?'✅':'⚠️';
+
+// ── Mostrar "não é notícia" ────────────────────────────────
+function showNotNewsResult(reason) {
+  const s = document.getElementById('resultSection');
+  s.innerHTML = `
+    <div style="text-align:center;padding:48px 24px">
+      <div style="font-size:64px;margin-bottom:16px">🤔</div>
+      <div style="font-family:var(--font-display,monospace);font-size:28px;letter-spacing:2px;color:var(--accent2,#00d4ff);margin-bottom:12px">NÃO É UMA NOTÍCIA</div>
+      <div style="color:var(--text2,#aaa);font-size:15px;max-width:480px;margin:0 auto 24px">${reason||'O texto não parece ser uma notícia ou afirmação factual verificável.'}</div>
+      <div style="background:var(--surface,#1a1a2e);border:1px solid var(--border,#333);border-radius:12px;padding:20px;max-width:480px;margin:0 auto;color:var(--text3,#888);font-size:13px;line-height:1.8">
+        💡 O VeriFact analisa notícias, titulares e afirmações factuais.<br>
+        <strong style="color:var(--text,#eee)">Exemplos:</strong><br>
+        <em>"Portugal vai abandonar o Euro em 2025"</em><br>
+        <em>"Cientistas descobriram cura para o cancro"</em>
+      </div>
+      <button onclick="resetScan()" style="margin-top:24px;background:var(--accent,#00f5a0);color:#000;border:none;border-radius:10px;padding:12px 32px;font-size:14px;font-weight:700;cursor:pointer">🔄 Tentar Novamente</button>
+    </div>`;
+  s.classList.add('active');
+  s.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+// ── Mostrar resultado ──────────────────────────────────────
+function showResult(result, factChecks) {
+  const s     = document.getElementById('resultSection');
+  const color = verdictColor(result.verdict);
+  const pct   = result.reliability;
+
+  const fcHtml = factChecks.length > 0 ? `
+    <div style="margin-top:24px">
+      <div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text3,#888);margin-bottom:12px">🔍 Verificações por Fontes Reais</div>
+      ${factChecks.map(f=>`
+        <div style="background:var(--surface2,#111);border:1px solid var(--border,#333);border-radius:10px;padding:14px 16px;margin-bottom:10px">
+          <div style="font-size:13px;color:var(--text,#eee);margin-bottom:8px">"${f.text.slice(0,130)}${f.text.length>130?'...':''}"</div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--surface,#1a1a2e);border:1px solid var(--border,#333);color:var(--accent2,#00d4ff)">${f.rating||'Verificado'}</span>
+            <span style="font-size:11px;color:var(--text3,#888)">por ${f.publisher}</span>
+            ${f.url?'<a href="'+f.url+'" target="_blank" style="font-size:11px;color:var(--accent,#00f5a0);margin-left:auto;text-decoration:none">Ver fonte →</a>':''}
+          </div>
+        </div>`).join('')}
+    </div>` : `
+    <div style="margin-top:24px;padding:14px 16px;background:var(--surface2,#111);border:1px solid var(--border,#333);border-radius:10px;font-size:13px;color:var(--text3,#888)">
+      ℹ️ Notícia não encontrada em bases de dados de fact-checking. Análise baseada exclusivamente em IA.
+    </div>`;
+
+  const indHtml = result.indicators.length > 0 ? `
+    <div style="margin-top:24px">
+      <div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text3,#888);margin-bottom:12px">🧩 Indicadores Encontrados</div>
+      ${result.indicators.map(ind=>`
+        <div style="display:flex;gap:10px;font-size:13px;color:var(--text2,#ccc);padding:8px 0;border-bottom:1px solid var(--border,#222)">
+          <span style="color:${color};flex-shrink:0">◆</span><span>${ind}</span>
+        </div>`).join('')}
+    </div>` : '';
+
+  s.innerHTML = `
+    <div style="padding:32px 24px">
+      <div style="text-align:center;margin-bottom:32px">
+        <div style="font-size:56px;margin-bottom:12px">${verdictEmoji(result.verdict)}</div>
+        <div style="font-family:var(--font-display,monospace);font-size:clamp(28px,6vw,48px);letter-spacing:3px;color:${color};margin-bottom:8px">${verdictLabel(result.verdict)}</div>
+        ${result.verdict_reason?'<div style="color:var(--text2,#aaa);font-size:14px;max-width:500px;margin:0 auto">'+result.verdict_reason+'</div>':''}
+      </div>
+
+      <div style="background:var(--surface,#1a1a2e);border:1px solid var(--border,#333);border-radius:14px;padding:20px 24px;margin-bottom:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <span style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text3,#888)">Índice de Fiabilidade</span>
+          <span style="font-family:var(--font-display,monospace);font-size:28px;color:${color}">${pct}%</span>
+        </div>
+        <div style="background:var(--surface2,#111);border-radius:999px;height:10px;overflow:hidden">
+          <div style="width:${pct}%;height:100%;background:${color};border-radius:999px;transition:width 1.2s ease"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:var(--text3,#888)">
+          <span>Falso</span><span>Suspeito</span><span>Verdadeiro</span>
+        </div>
+      </div>
+
+      <div style="background:var(--surface,#1a1a2e);border:1px solid var(--border,#333);border-radius:14px;padding:20px 24px;margin-bottom:20px">
+        <div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text3,#888);margin-bottom:10px">📋 Resumo da Análise</div>
+        <p style="color:var(--text,#eee);font-size:14px;line-height:1.7;margin:0">${result.summary}</p>
+        ${result.what_is_true?'<div style="margin-top:12px;padding:10px 14px;background:rgba(0,245,160,0.08);border-left:3px solid #00f5a0;border-radius:4px;font-size:13px;color:var(--text2,#ccc)"><strong style="color:#00f5a0">O que é verdade:</strong> '+result.what_is_true+'</div>':''}
+      </div>
+
+      ${fcHtml}
+      ${indHtml}
+
+      <div style="display:flex;gap:12px;margin-top:28px;flex-wrap:wrap">
+        <button id="downloadPdfBtn" style="flex:1;min-width:140px;background:var(--accent,#00f5a0);color:#000;border:none;border-radius:10px;padding:13px 20px;font-size:14px;font-weight:700;cursor:pointer">📄 Descarregar PDF</button>
+        <button onclick="resetScan()" style="flex:1;min-width:140px;background:var(--surface,#1a1a2e);color:var(--text,#eee);border:1px solid var(--border,#333);border-radius:10px;padding:13px 20px;font-size:14px;font-weight:600;cursor:pointer">🔄 Nova Verificação</button>
+      </div>
+      <div style="margin-top:12px;font-size:11px;color:var(--text3,#888);text-align:center">
+        Confiança da IA: ${result.confidence}% · Fontes verificadas: ${factChecks.length}
+      </div>
+    </div>`;
+
+  document.getElementById('downloadPdfBtn').addEventListener('click', generatePDF);
+  s.classList.add('active');
+  s.scrollIntoView({ behavior:'smooth', block:'start' });
   document.getElementById('scanBtn').disabled = false;
 }
 
-// ============================================================
-//  RENDER RESULT
-// ============================================================
-function renderResult(result) {
-  const section = document.getElementById('resultSection');
-
-  const indicatorsHtml = result.indicators.map(i => `
-    <div class="indicator-item">
-      <div class="indicator-name">${i.name}</div>
-      <div class="indicator-value ${i.type}">${i.value}</div>
-    </div>`).join('');
-
-  const sourcesHtml = result.sources.map(s => `
-    <div class="source-item" style="cursor:pointer" onclick="window.open('${s.url}','_blank')">
-      <div class="source-dot ${s.status === 'credible' ? 'credible' : s.status === 'fake' ? 'fake' : 'suspicious'}"></div>
-      <div style="flex:1;min-width:0">
-        <div class="source-name" style="font-weight:600;color:var(--text)">
-          ${s.name}${s.isFactChecker ? ' <span style="font-size:10px;background:rgba(0,245,160,0.15);color:var(--accent);padding:1px 6px;border-radius:4px">FACT-CHECK</span>' : ''}
-        </div>
-        <div style="font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.title}</div>
-      </div>
-      <span class="source-badge badge badge-${s.status === 'credible' ? 'real' : s.status === 'fake' ? 'fake' : 'suspicious'}">${s.label}</span>
-    </div>`).join('');
-
-  const realNewsHtml = result.realNews ? `
-    <div>
-      <div class="result-section-label">Notícia real correspondente</div>
-      <div class="real-news-card">
-        <h4>${result.realNews.title}</h4>
-        <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">
-          ${result.realNews.items.map(item => `
-            <a href="${item.url}" target="_blank" rel="noopener" style="display:flex;flex-direction:column;gap:3px;padding:12px;background:rgba(0,245,160,0.05);border:1px solid rgba(0,245,160,0.15);border-radius:8px;text-decoration:none;">
-              <span style="font-weight:700;color:var(--green);font-size:13px">🔗 ${item.name}</span>
-              <span style="font-size:12px;color:var(--text2)">${item.snippet}</span>
-            </a>`).join('')}
-        </div>
-      </div>
-    </div>` : '';
-
-  section.innerHTML = `
-    <div class="result-card ${result.verdict}">
-      <div class="result-header">
-        <div class="result-verdict-icon">${result.verdictIcon}</div>
-        <div class="result-verdict-text">
-          <h2>${result.verdictText}</h2>
-          <div style="font-size:12px;color:var(--text3);margin-bottom:12px;font-family:var(--font-mono)">
-            Pesquisado em ${lastResult?.searchResults?.length || 0} fontes · ${new Date().toLocaleString('pt-PT')}
-          </div>
-          <div class="result-confidence">
-            <span class="confidence-label">Fiabilidade:</span>
-            <div class="confidence-bar ${result.verdict}"><div class="confidence-fill" style="width:0%" data-target="${result.reliability}"></div></div>
-            <span class="confidence-value">${result.reliability}%</span>
-          </div>
-          <div class="result-confidence" style="margin-top:8px">
-            <span class="confidence-label">Confiança:</span>
-            <div class="confidence-bar ${result.verdict}"><div class="confidence-fill" style="width:0%" data-target="${result.confidence}"></div></div>
-            <span class="confidence-value">${result.confidence}%</span>
-          </div>
-        </div>
-      </div>
-      <div class="result-body">
-        <div>
-          <div class="result-section-label">Resumo da análise</div>
-          <p class="result-summary">${result.summary}</p>
-          ${result.keywords ? `<p style="font-size:12px;color:var(--text3);margin-top:8px;font-family:var(--font-mono)">🔍 Pesquisado por: "${result.keywords}"</p>` : ''}
-        </div>
-        <div>
-          <div class="result-section-label">Indicadores</div>
-          <div class="indicators-grid">${indicatorsHtml}</div>
-        </div>
-        <div>
-          <div class="result-section-label">Fontes verificadas (clica para abrir)</div>
-          <div class="sources-list">${sourcesHtml || '<p style="color:var(--text3);font-size:14px;padding:12px">Nenhuma fonte encontrada para esta informação.</p>'}</div>
-        </div>
-        ${realNewsHtml}
-      </div>
-    </div>
-    <div class="download-section">
-      <p>Descarrega o relatório detalhado com toda a análise e fontes encontradas.</p>
-      <button class="btn-download" id="downloadPdfBtn">⬇ Descarregar Relatório PDF</button><br/>
-      <button class="btn-new-scan" id="newScanBtn">🔄 Nova Verificação</button>
-    </div>`;
-
-  section.classList.add('active');
-  setTimeout(() => {
-    section.querySelectorAll('.confidence-fill[data-target]').forEach(b => { b.style.width = b.getAttribute('data-target') + '%'; });
-  }, 100);
-  section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  document.getElementById('downloadPdfBtn').addEventListener('click', generatePDF);
-  document.getElementById('newScanBtn').addEventListener('click', resetScan);
-}
-
-// ============================================================
-//  GERAR PDF
-// ============================================================
-async function generatePDF() {
-  if (!lastResult) return;
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation:'p', unit:'mm', format:'a4' });
-  const W = 210, M = 20;
-  let y = 20;
-
-  const C = { fake:[220,38,38], real:[16,185,129], suspicious:[245,158,11], dark:[15,15,25], gray:[80,80,110], light:[230,230,240] };
-  const vc = C[lastResult.verdict] || C.gray;
-
-  doc.setFillColor(...C.dark); doc.rect(0,0,W,297,'F');
-  doc.setFillColor(...vc); doc.rect(0,0,W,48,'F');
-  doc.setFontSize(26); doc.setTextColor(0,0,0); doc.setFont('helvetica','bold');
-  doc.text('VERIFACT', M, 20);
-  doc.setFontSize(9); doc.setFont('helvetica','normal');
-  doc.text('Detector de Fake News — Relatório com Pesquisa Web em Tempo Real', M, 29);
-  doc.text(`Gerado em: ${lastResult.timestamp.toLocaleString('pt-PT')}`, M, 37);
-  doc.setFillColor(0,0,0); doc.roundedRect(W-85,10,66,28,4,4,'F');
-  doc.setTextColor(255,255,255); doc.setFontSize(18); doc.setFont('helvetica','bold');
-  doc.text(lastResult.verdictText||'INCERTO', W-52, 28, {align:'center'});
-
-  y = 62;
-  doc.setTextColor(...vc); doc.setFontSize(8); doc.setFont('helvetica','bold');
-  doc.text('TERMOS PESQUISADOS', M, y); y+=6;
-  doc.setFillColor(20,20,38); doc.roundedRect(M,y,W-M*2,10,2,2,'F');
-  doc.setTextColor(...C.light); doc.setFont('helvetica','normal');
-  doc.text(`🔍  ${lastResult.keywords||'—'}`, M+4, y+7); y+=17;
-
-  doc.setTextColor(...vc); doc.setFontSize(8); doc.setFont('helvetica','bold');
-  doc.text('PONTUAÇÃO', M, y); y+=7;
-  [[`Fiabilidade`, lastResult.reliability, vc],[`Confiança`, lastResult.confidence, C.gray]].forEach(([lbl,val,col]) => {
-    doc.setFillColor(30,30,50); doc.roundedRect(M,y,W-M*2,10,2,2,'F');
-    doc.setFillColor(...col); doc.roundedRect(M,y,(W-M*2)*(val/100),10,2,2,'F');
-    doc.setTextColor(...C.light); doc.setFontSize(8);
-    doc.text(`${lbl}: ${val}%`, M+3,y+7); y+=13;
-  });
-  y+=4;
-
-  doc.setTextColor(...vc); doc.setFontSize(8); doc.setFont('helvetica','bold');
-  doc.text('RESUMO DA ANÁLISE', M, y); y+=6;
-  doc.setFillColor(22,22,38); doc.roundedRect(M,y,W-M*2,28,3,3,'F');
-  doc.setTextColor(...C.light); doc.setFont('helvetica','normal');
-  doc.text(doc.splitTextToSize(lastResult.summary||'',W-M*2-8).slice(0,4), M+4,y+7); y+=34;
-
-  doc.setTextColor(...vc); doc.setFontSize(8); doc.setFont('helvetica','bold');
-  doc.text(`FONTES ENCONTRADAS (${lastResult.sources?.length||0})`, M, y); y+=7;
-  (lastResult.sources||[]).slice(0,8).forEach(src => {
-    if (y>262) { doc.addPage(); doc.setFillColor(...C.dark); doc.rect(0,0,W,297,'F'); y=20; }
-    const dc = src.status==='credible'?C.real:src.status==='fake'?C.fake:C.gray;
-    doc.setFillColor(22,22,38); doc.roundedRect(M,y,W-M*2,13,2,2,'F');
-    doc.setFillColor(...dc); doc.circle(M+6,y+6.5,2.5,'F');
-    doc.setTextColor(...C.light); doc.setFont('helvetica','bold'); doc.setFontSize(8);
-    doc.text(src.name, M+12,y+5);
-    doc.setFont('helvetica','normal'); doc.setTextColor(...C.gray);
-    doc.text((src.title||'').substring(0,72), M+12,y+10);
-    doc.setTextColor(...dc); doc.text(src.label||'',W-M-2,y+7,{align:'right'});
-    y+=16;
-  });
-
-  if (lastResult.realNews) {
-    y+=4; if(y>255){doc.addPage();doc.setFillColor(...C.dark);doc.rect(0,0,W,297,'F');y=20;}
-    doc.setTextColor(16,185,129); doc.setFontSize(8); doc.setFont('helvetica','bold');
-    doc.text('FONTES CREDENCIADAS PARA VERIFICAÇÃO', M, y); y+=7;
-    const bh = (lastResult.realNews.items?.length||0)*14+12;
-    doc.setFillColor(15,38,28); doc.roundedRect(M,y,W-M*2,bh,3,3,'F');
-    (lastResult.realNews.items||[]).forEach((item,i) => {
-      doc.setTextColor(0,212,255); doc.setFont('helvetica','bold'); doc.setFontSize(8);
-      doc.text(`→ ${item.name}`, M+4,y+8+i*14);
-      doc.setTextColor(...C.gray); doc.setFont('helvetica','normal');
-      doc.text((item.snippet||'').substring(0,80), M+4,y+13+i*14);
-    });
-    y+=bh+8;
-  }
-
-  doc.setFillColor(...vc); doc.rect(0,285,W,12,'F');
-  doc.setTextColor(0,0,0); doc.setFontSize(8); doc.setFont('helvetica','bold');
-  doc.text('VERIFACT — Verificação de Factos com Pesquisa Web em Tempo Real', M, 293);
-
-  const filename = `VeriFact_${lastResult.verdictText}_${new Date().toISOString().slice(0,10)}.pdf`;
-  doc.save(filename);
-  showToast('📄 Relatório PDF descarregado!', 'success');
-
-  if (typeof Reports !== 'undefined' && lastResult?.scanId) {
-    try {
-      const pdfString  = doc.output('datauristring');
-      const fileSizeKb = Math.round((pdfString.length * 0.75) / 1024);
-      await Reports.save(lastResult.scanId, filename, fileSizeKb);
-    } catch (e) { console.warn('Report DB save failed:', e); }
-  }
-}
-
-// ============================================================
-//  RESET
-// ============================================================
+// ── Reset ─────────────────────────────────────────────────
 function resetScan() {
-  document.getElementById('newsText').value = '';
-  const u = document.getElementById('newsUrl'); if(u) u.value = '';
+  const nt = document.getElementById('newsText'); if (nt) nt.value='';
+  const nu = document.getElementById('newsUrl');  if (nu) nu.value='';
+  const cc = document.getElementById('charCount');if (cc) cc.textContent='0';
   document.getElementById('resultSection').classList.remove('active');
-  document.getElementById('resultSection').innerHTML = '';
   document.getElementById('progressSection').classList.remove('active');
-  const cc = document.getElementById('charCount'); if(cc) cc.textContent='0';
   lastResult = null;
   window.scrollTo({ top:0, behavior:'smooth' });
 }
 
-// ============================================================
-//  INIT
-// ============================================================
-document.addEventListener('DOMContentLoaded', () => {
-  const textarea = document.getElementById('newsText');
-  const counter  = document.getElementById('charCount');
-  if (textarea && counter) textarea.addEventListener('input', () => { counter.textContent = textarea.value.length; });
+// ── Gerar PDF Profissional ────────────────────────────────
+async function generatePDF() {
+  if (!lastResult) return;
+  if (typeof VF_isLoggedIn==='function' && !VF_isLoggedIn()) {
+    showToast('Tens de fazer login para descarregar o PDF.','error');
+    setTimeout(()=>{ if(confirm('Fazer login agora?')) window.location.href='login.html'; },500);
+    return;
+  }
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+    const W=210, H=297, m=18, cw=W-m*2;
+    let y=0, page=1;
+
+    // ── Cores ──────────────────────────────────────────────
+    const C = {
+      dark:    [10,10,20],
+      dark2:   [22,22,35],
+      dark3:   [30,30,50],
+      accent:  [0,220,140],
+      accent2: [0,200,230],
+      fake:    [220,50,80],
+      susp:    [220,180,0],
+      real:    [0,220,140],
+      white:   [255,255,255],
+      gray1:   [200,200,215],
+      gray2:   [140,140,160],
+      gray3:   [80,80,100],
+      text:    [30,30,50],
+    };
+
+    const vColor = lastResult.verdict==='fake' ? C.fake :
+                   lastResult.verdict==='real' ? C.real : C.susp;
+    const vLabel = verdictLabel(lastResult.verdict);
+    const rel    = lastResult.reliability || 50;
+    const now    = new Date();
+    const dateStr= now.toLocaleDateString('pt-PT',{day:'2-digit',month:'long',year:'numeric'});
+    const timeStr= now.toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'});
+    const user   = (typeof VF_getUser==='function') ? VF_getUser() : null;
+    const reportId = 'VF-'+Date.now().toString(36).toUpperCase();
+
+    // ════════════════════════════════════════════════════════
+    // FUNÇÕES AUXILIARES
+    // ════════════════════════════════════════════════════════
+
+    function addHeader() {
+      // Fundo principal
+      doc.setFillColor(...C.dark); doc.rect(0,0,W,56,'F');
+
+      // Bloco lateral esquerdo accent
+      doc.setFillColor(...C.accent); doc.rect(0,0,5,56,'F');
+
+      // Faixa inferior do header
+      doc.setFillColor(...C.dark2); doc.rect(5,42,W-5,14,'F');
+
+      // Linha gradiente no fundo do header
+      for(let i=0;i<W-5;i++){
+        const t = i/(W-5);
+        const g2 = Math.round(220*(1-t)+200*t);
+        const b2 = Math.round(140*(1-t)+230*t);
+        doc.setFillColor(0,g2,b2);
+        doc.rect(5+i,55,1,1.5,'F');
+      }
+
+      // Logo grande
+      doc.setTextColor(...C.accent); doc.setFontSize(28); doc.setFont('helvetica','bold');
+      doc.text('VERI', m, 22);
+      const vw = doc.getTextWidth('VERI');
+      doc.setTextColor(255,255,255);
+      doc.text('FACT', m+vw, 22);
+
+      // Tag abaixo do logo
+      doc.setFillColor(...C.accent); doc.roundedRect(m, 26, 62, 7, 2, 2, 'F');
+      doc.setTextColor(0,0,0); doc.setFontSize(7); doc.setFont('helvetica','bold');
+      doc.text('RELATORIO DE VERIFICACAO DE FACTOS', m+3, 31);
+
+      // Linha separadora vertical
+      doc.setDrawColor(...C.dark3); doc.setLineWidth(0.3);
+      doc.line(W/2, 6, W/2, 40);
+
+      // Bloco info direita - caixa
+      doc.setFillColor(...C.dark3); doc.roundedRect(W/2+4, 5, W/2-m-4, 34, 2, 2, 'F');
+
+      doc.setTextColor(...C.accent2); doc.setFontSize(7.5); doc.setFont('helvetica','bold');
+      doc.text('ID DO RELATORIO', W/2+8, 12);
+      doc.setTextColor(255,255,255); doc.setFont('helvetica','normal'); doc.setFontSize(8.5);
+      doc.text(reportId, W/2+8, 18);
+
+      doc.setTextColor(...C.accent2); doc.setFontSize(7.5); doc.setFont('helvetica','bold');
+      doc.text('DATA E HORA', W/2+8, 26);
+      doc.setTextColor(255,255,255); doc.setFont('helvetica','normal'); doc.setFontSize(8);
+      doc.text(dateStr+' - '+timeStr, W/2+8, 32);
+
+      // Rodapé do header
+      doc.setTextColor(...C.gray3); doc.setFontSize(7);
+      doc.text('verifact.fwh.is', m, 50);
+      if(user) {
+        doc.setTextColor(...C.gray2);
+        doc.text('Utilizador: '+(user.name||user.email||''), W-m, 50, {align:'right'});
+      }
+
+      y = 66;
+    }
+
+    function addFooter(pg, total) {
+      // Linha
+      doc.setDrawColor(...C.dark3); doc.setLineWidth(0.3);
+      doc.line(m, H-16, W-m, H-16);
+      // Fundo
+      doc.setFillColor(...C.dark); doc.rect(0,H-14,W,14,'F');
+      // Texto
+      doc.setTextColor(...C.gray3); doc.setFontSize(7); doc.setFont('helvetica','normal');
+      doc.text('VeriFact — Detector de Fake News com Inteligência Artificial', m, H-7);
+      doc.text('Este relatório foi gerado automaticamente e deve ser usado apenas como referência.', m, H-3.5);
+      doc.setTextColor(...C.accent2);
+      doc.text('Página '+pg+(total?' de '+total:''), W-m, H-7, {align:'right'});
+      doc.text('verifact.fwh.is', W-m, H-3.5, {align:'right'});
+    }
+
+    function sectionTitle(title) {
+      checkPage(16);
+      // Fundo escuro com borda accent
+      doc.setFillColor(18,18,30);
+      doc.roundedRect(m, y, cw, 10, 2, 2, 'F');
+      // Barra accent esquerda
+      doc.setFillColor(...C.accent);
+      doc.roundedRect(m, y, 3, 10, 1, 1, 'F');
+      // Linha accent direita fina
+      doc.setFillColor(...C.accent2);
+      doc.roundedRect(m+cw-2, y, 2, 10, 1, 1, 'F');
+      // Texto
+      doc.setTextColor(...C.accent); doc.setFontSize(8); doc.setFont('helvetica','bold');
+      doc.text(title.toUpperCase(), m+8, y+7);
+      y += 15;
+    }
+
+    function checkPage(needed) {
+      if (y + needed > H-22) {
+        addFooter(page, null);
+        doc.addPage();
+        page++;
+        addHeader();
+      }
+    }
+
+    function textBlock(text, size, color, bold, indent, lineH) {
+      const fnt = bold ? 'bold' : 'normal';
+      const lh  = lineH || (size * 0.42);
+      doc.setFont('helvetica', fnt);
+      doc.setFontSize(size);
+      doc.setTextColor(...color);
+      const lines = doc.splitTextToSize(text, cw-(indent||0));
+      checkPage(lines.length * lh + 4);
+      doc.text(lines, m+(indent||0), y);
+      y += lines.length * lh + 3;
+      return lines.length * lh + 3;
+    }
+
+    function infoRow(label, value, labelColor, valueColor) {
+      checkPage(7);
+      doc.setFont('helvetica','bold'); doc.setFontSize(8);
+      doc.setTextColor(...(labelColor||C.gray2));
+      doc.text(label+':', m+2, y);
+      doc.setFont('helvetica','normal');
+      doc.setTextColor(...(valueColor||C.gray1));
+      const vlines = doc.splitTextToSize(String(value||''), cw-45);
+      doc.text(vlines, m+38, y);
+      y += Math.max(6, vlines.length*4.5);
+    }
+
+    // ════════════════════════════════════════════════════════
+    // PÁGINA 1
+    // ════════════════════════════════════════════════════════
+    addHeader();
+
+    // ── VEREDICTO PRINCIPAL ──────────────────────────────
+    doc.setFillColor(...vColor);
+    doc.roundedRect(m, y, cw, 28, 4, 4, 'F');
+    // Overlay escuro leve
+    doc.setFillColor(0,0,0); doc.setGState(new doc.GState({opacity:0.15}));
+    doc.roundedRect(m, y, cw, 28, 4, 4, 'F');
+    doc.setGState(new doc.GState({opacity:1}));
+
+    doc.setTextColor(0,0,0); doc.setFontSize(18); doc.setFont('helvetica','bold');
+    const vIcon = lastResult.verdict==='fake'?'FALSO':lastResult.verdict==='real'?'VERDADEIRO':'SUSPEITO';
+    doc.text(vIcon, m+8, y+12);
+    doc.setFontSize(9); doc.setFont('helvetica','normal');
+    doc.text('Veredicto da análise com Inteligência Artificial', m+8, y+19);
+    // Fiabilidade direita
+    doc.setFontSize(22); doc.setFont('helvetica','bold');
+    doc.text(rel+'%', W-m-8, y+14, {align:'right'});
+    doc.setFontSize(8); doc.setFont('helvetica','normal');
+    doc.text('índice de fiabilidade', W-m-8, y+21, {align:'right'});
+    y += 34;
+
+    // ── BARRA DE FIABILIDADE ─────────────────────────────
+    checkPage(18);
+    doc.setFillColor(...C.dark2); doc.roundedRect(m, y, cw, 8, 4, 4, 'F');
+    const barW = (cw * rel / 100);
+    doc.setFillColor(...vColor); doc.roundedRect(m, y, barW, 8, 4, 4, 'F');
+    doc.setTextColor(...C.gray2); doc.setFontSize(7); doc.setFont('helvetica','normal');
+    doc.text('0%', m, y+13); doc.text('50%', m+cw/2, y+13, {align:'center'}); doc.text('100%', m+cw, y+13, {align:'right'});
+    y += 18;
+
+    // ── INFORMAÇÕES DA ANÁLISE ───────────────────────────
+    sectionTitle('Informações da Análise', '');
+    doc.setFillColor(...C.dark2); doc.roundedRect(m, y, cw, 38, 3, 3, 'F');
+    y += 6;
+    infoRow('Data e Hora',     dateStr+' às '+timeStr, C.gray2, C.text);
+    infoRow('ID do Relatório', reportId,                C.gray2, C.accent2);
+    infoRow('Veredicto',       vLabel+' ('+rel+'% fiável)', C.gray2, vColor);
+    infoRow('Confiança IA',    (lastResult.confidence||'N/D')+'%', C.gray2, C.text);
+    if(user) infoRow('Utilizador', user.name||user.email||'', C.gray2, C.text);
+    y += 4;
+
+    // ── TEXTO ANALISADO ──────────────────────────────────
+    sectionTitle('Conteúdo Analisado', '');
+    const inputText = lastResult.inputText || '';
+    doc.setFillColor(...C.dark2); 
+    const inputLines = doc.splitTextToSize(inputText.slice(0,600)+(inputText.length>600?'...':''), cw-12);
+    const inputH = Math.max(20, inputLines.length * 4.5 + 10);
+    checkPage(inputH + 4);
+    doc.roundedRect(m, y, cw, inputH, 3, 3, 'F');
+    doc.setFillColor(...C.accent); doc.roundedRect(m, y, 2, inputH, 1, 1, 'F');
+    doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(...C.gray1);
+    doc.text(inputLines, m+6, y+6);
+    y += inputH + 8;
+
+    // ── RESUMO DA IA ─────────────────────────────────────
+    sectionTitle('Análise da Inteligência Artificial', '');
+    textBlock(lastResult.summary || 'Sem resumo disponível.', 9.5, C.text, false, 0, 4.8);
+    y += 4;
+
+    // ════════════════════════════════════════════════════════
+    // FACT-CHECKS
+    // ════════════════════════════════════════════════════════
+    if (lastResult.sources && lastResult.sources.length > 0) {
+      sectionTitle('Verificações de Fontes Externas', '');
+      doc.setTextColor(...C.gray2); doc.setFontSize(8); doc.setFont('helvetica','normal');
+      doc.text('Resultados obtidos através da Google Fact Check API e bases de dados internacionais de fact-checking.', m, y);
+      y += 8;
+
+      lastResult.sources.forEach((fc, idx) => {
+        const ratingColor = /false|falso|fake|incorrect/i.test(fc.rating) ? C.fake :
+                            /true|verdadeiro|correct/i.test(fc.rating)     ? C.real : C.susp;
+
+        const fcText = (fc.text||'').slice(0,200);
+        const fcLines = doc.splitTextToSize(fcText, cw-10);
+        const fcH = fcLines.length*4.5 + 22;
+        checkPage(fcH + 6);
+
+        // Card
+        doc.setFillColor(...C.dark2); doc.roundedRect(m, y, cw, fcH, 3, 3, 'F');
+        doc.setFillColor(...ratingColor); doc.roundedRect(m, y, 3, fcH, 1, 1, 'F');
+
+        // Número
+        doc.setFillColor(...ratingColor); doc.circle(m+10, y+8, 4, 'F');
+        doc.setTextColor(0,0,0); doc.setFontSize(8); doc.setFont('helvetica','bold');
+        doc.text(String(idx+1), m+10, y+10, {align:'center'});
+
+        // Publisher + rating
+        doc.setTextColor(...C.gray1); doc.setFontSize(8.5); doc.setFont('helvetica','bold');
+        doc.text((fc.publisher||'Fonte desconhecida').slice(0,40), m+17, y+7);
+        doc.setFillColor(...ratingColor);
+        const rLabel = (fc.rating||'Não classificado').slice(0,30);
+        const rW = doc.getTextWidth(rLabel)+8;
+        doc.roundedRect(W-m-rW-2, y+2, rW+2, 7, 2, 2, 'F');
+        doc.setTextColor(0,0,0); doc.setFontSize(7); doc.setFont('helvetica','bold');
+        doc.text(rLabel, W-m-rW/2-1, y+7, {align:'center'});
+
+        // Texto
+        doc.setTextColor(...C.gray1); doc.setFontSize(8.5); doc.setFont('helvetica','normal');
+        doc.text(fcLines, m+6, y+14);
+
+        // URL
+        if(fc.url) {
+          doc.setTextColor(...C.accent2); doc.setFontSize(7);
+          doc.text(fc.url.slice(0,70), m+6, y+fcH-4);
+        }
+
+        y += fcH + 5;
+      });
+    } else {
+      sectionTitle('Verificações de Fontes Externas', '');
+      doc.setFillColor(...C.dark2); doc.roundedRect(m, y, cw, 14, 3, 3, 'F');
+      doc.setTextColor(...C.gray2); doc.setFontSize(9); doc.setFont('helvetica','italic');
+      doc.text('Nenhuma verificação de fonte externa encontrada para este conteúdo.', m+6, y+9);
+      y += 20;
+    }
+
+    // ════════════════════════════════════════════════════════
+    // INDICADORES
+    // ════════════════════════════════════════════════════════
+    if (lastResult.indicators && lastResult.indicators.length > 0) {
+      sectionTitle('Indicadores Detetados pela IA', '');
+      doc.setTextColor(...C.gray2); doc.setFontSize(8); doc.setFont('helvetica','normal');
+      doc.text('Padrões e características identificadas no conteúdo analisado:', m, y);
+      y += 8;
+
+      lastResult.indicators.forEach((ind, idx) => {
+        const indLines = doc.splitTextToSize(ind, cw-16);
+        const indH = indLines.length*4.5+8;
+        checkPage(indH+3);
+        doc.setFillColor(...C.dark2); doc.roundedRect(m, y, cw, indH, 2, 2, 'F');
+        doc.setFillColor(...C.susp); doc.roundedRect(m, y, 2, indH, 1, 1, 'F');
+        doc.setTextColor(...C.accent); doc.setFontSize(8); doc.setFont('helvetica','bold');
+        doc.text(String(idx+1), m+5, y+indH/2+2);
+        doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(...C.gray1);
+        doc.text(indLines, m+14, y+5);
+        y += indH+4;
+      });
+      y += 4;
+    }
+
+    // ════════════════════════════════════════════════════════
+    // METODOLOGIA
+    // ════════════════════════════════════════════════════════
+    sectionTitle('Metodologia de Verificação', '');
+    checkPage(55);
+    doc.setFillColor(...C.dark2); doc.roundedRect(m, y, cw, 50, 3, 3, 'F');
+    y += 7;
+    const steps = [
+      ['1. Obtenção do Conteúdo', 'Extração e limpeza do texto fornecido pelo utilizador, seja texto direto ou URL.'],
+      ['2. Validação', 'A IA verifica se o conteúdo é uma afirmação factual verificável.'],
+      ['3. Google Fact Check API', 'Pesquisa em bases de dados internacionais: Polígrafo, Reuters, AFP, Lupa, PolitiFact, e outras.'],
+      ['4. Análise com IA (Groq LLaMA 3.3 70B)', 'Análise semântica profunda com contexto dos fact-checks encontrados.'],
+      ['5. Cálculo da Fiabilidade', 'Combinação do resultado da IA com os fact-checks reais para determinar o índice final.'],
+    ];
+    steps.forEach(([title, desc]) => {
+      doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(...C.accent);
+      doc.text(title, m+5, y);
+      doc.setFont('helvetica','normal'); doc.setTextColor(...C.gray2);
+      doc.text(desc, m+5, y+4.5);
+      y += 10;
+    });
+    y += 4;
+
+    // ════════════════════════════════════════════════════════
+    // AVISO LEGAL
+    // ════════════════════════════════════════════════════════
+    checkPage(28);
+    doc.setFillColor(60,20,20); doc.roundedRect(m, y, cw, 22, 3, 3, 'F');
+    doc.setFillColor(...C.fake); doc.roundedRect(m, y, 3, 22, 1, 1, 'F');
+    doc.setTextColor(...C.fake); doc.setFontSize(8); doc.setFont('helvetica','bold');
+    doc.text('AVISO IMPORTANTE', m+7, y+7);
+    doc.setTextColor(220,180,180); doc.setFont('helvetica','normal'); doc.setFontSize(8);
+    const disclaimer = 'Este relatório foi gerado automaticamente por inteligência artificial e deve ser usado apenas como referência. O VeriFact não garante a precisão absoluta dos resultados. Recomendamos sempre verificar as informações junto de fontes jornalísticas credenciadas antes de partilhar qualquer conteúdo.';
+    const dLines = doc.splitTextToSize(disclaimer, cw-10);
+    doc.text(dLines, m+7, y+13);
+    y += 28;
+
+    // Footers em todas as páginas
+    const totalPages = doc.getNumberOfPages();
+    for(let p=1; p<=totalPages; p++) {
+      doc.setPage(p);
+      addFooter(p, totalPages);
+    }
+
+    const fname = 'verifact-relatorio-'+lastResult.verdict+'-'+Date.now()+'.pdf';
+    doc.save(fname);
+    showToast('📄 Relatório PDF gerado com sucesso!','success');
+    if (typeof Reports!=='undefined' && typeof VF_isLoggedIn==='function' && VF_isLoggedIn()) {
+      Reports.save(null, fname, rel).catch(()=>{});
+    }
+  } catch(e) {
+    console.error('PDF error:', e);
+    showToast('Erro ao gerar PDF: '+e.message,'error');
+  }
+}
+
+// ── FUNÇÃO PRINCIPAL ───────────────────────────────────────
+async function runScan() {
+  let inputText = '';
+
+  if (currentMode==='text') {
+    inputText = (document.getElementById('newsText')?.value||'').trim();
+    if (inputText.length < 20) { showToast('Insere pelo menos 20 caracteres.','error'); return; }
+  } else {
+    const url = (document.getElementById('newsUrl')?.value||'').trim();
+    if (!url.startsWith('http')) { showToast('Insere um URL válido.','error'); return; }
+    inputText = url;
+  }
+
+  // Reset UI
+  document.getElementById('resultSection').classList.remove('active');
+  document.getElementById('progressSection').classList.add('active');
+  document.getElementById('scanBtn').disabled = true;
+  for (let i=0;i<6;i++) setStep(i,'','—');
+  setProgress(0,'A iniciar...');
+  lastResult = null;
+
+  let analysisText = inputText;
+
+  try {
+    // PASSO 0 — Obter conteúdo
+    setStep(0,'active','A processar...');
+    setProgress(5,'A obter conteúdo...');
+    if (currentMode==='url') {
+      try {
+        analysisText = await fetchUrlContent(inputText);
+        setStep(0,'done','✓ Conteúdo obtido ('+analysisText.length+' chars)');
+      } catch(e) {
+        setStep(0,'error','✗ '+e.message);
+        showToast(e.message,'error');
+        document.getElementById('progressSection').classList.remove('active');
+        document.getElementById('scanBtn').disabled=false;
+        return;
+      }
+    } else {
+      await sleep(200);
+      setStep(0,'done','✓ Texto recebido');
+    }
+    setProgress(15,'Conteúdo pronto');
+
+    // PASSO 1 — Validar se é notícia
+    setStep(1,'active','A validar conteúdo...');
+    setProgress(22,'A verificar se é uma notícia...');
+    const validation = await validateIsNews(analysisText);
+
+    if (!validation.is_news) {
+      setStep(1,'error','✗ Não é uma notícia');
+      setProgress(100,'Análise interrompida');
+      document.getElementById('progressSection').classList.remove('active');
+      document.getElementById('scanBtn').disabled=false;
+      showNotNewsResult(validation.reason);
+      return;
+    }
+    setStep(1,'done','✓ Notícia: '+(validation.topic||''));
+    setProgress(30,'Conteúdo validado');
+
+    // PASSO 2 — Google Fact Check
+    setStep(2,'active','A pesquisar em bases de dados...');
+    setProgress(42,'A consultar Google Fact Check API...');
+    const keywords = analysisText.replace(/[^\w\s]/g,' ').split(/\s+/).filter(w=>w.length>4).slice(0,8).join(' ');
+    const factChecks = await searchFactCheck(keywords);
+    if (factChecks.length>0) {
+      setStep(2,'done','✓ '+factChecks.length+' verificação(ões) encontrada(s)');
+      setProgress(55,factChecks.length+' resultados de fact-checking encontrados');
+    } else {
+      setStep(2,'done','○ Sem verificações anteriores');
+      setProgress(55,'Nenhum registo encontrado — a analisar com IA');
+    }
+
+    // PASSO 3 — Groq
+    setStep(3,'active','A analisar com IA...');
+    setProgress(65,'Groq AI a processar...');
+    const aiResult = await analyzeWithGroq(analysisText, factChecks);
+    setStep(3,'done','✓ Análise concluída');
+    setProgress(80,'Análise completa');
+
+    // PASSO 4 — Calcular veredicto final
+    setStep(4,'active','A calcular veredicto...');
+    setProgress(88,'A calcular veredicto final...');
+    await sleep(300);
+
+    // Ajustar reliability se há fact-checks com veredictos claros
+    let reliability = aiResult.reliability;
+    if (factChecks.length>0) {
+      const ratings = factChecks.map(f=>f.rating.toLowerCase());
+      const hasFalse = ratings.some(r=>['falso','false','fake','enganoso','incorreto','misleading'].some(k=>r.includes(k)));
+      const hasTrue  = ratings.some(r=>['verdade','true','correto','verdadeiro'].some(k=>r.includes(k)));
+      if (hasFalse) reliability = Math.min(reliability, 28);
+      if (hasTrue)  reliability = Math.max(reliability, 65);
+    }
+
+    setStep(4,'done','✓ Veredicto: '+verdictLabel(aiResult.verdict));
+    setProgress(95,'A finalizar...');
+
+    // PASSO 5 — Guardar
+    setStep(5,'active','A guardar...');
+    const finalResult = {
+      ...aiResult, reliability, sources: factChecks,
+      inputText: analysisText.slice(0,300),
+    };
+    lastResult = finalResult;
+
+    if (typeof VF_isLoggedIn==='function' && VF_isLoggedIn() && typeof Scans!=='undefined') {
+      try {
+        await Scans.save({
+          input_type:    currentMode,
+          input_content: analysisText.slice(0,2000),
+          verdict:       finalResult.verdict,
+          reliability:   finalResult.reliability,
+          confidence:    finalResult.confidence,
+          fake_score:    100-finalResult.reliability,
+          summary:       finalResult.summary,
+          sources:       JSON.stringify(finalResult.sources),
+        });
+      } catch(e) { console.warn('Erro ao guardar scan:', e); }
+    }
+
+    setStep(5,'done','✓ Concluído');
+    setProgress(100,'Análise completa!');
+    await sleep(400);
+
+    document.getElementById('progressSection').classList.remove('active');
+    showResult(finalResult, factChecks);
+
+  } catch(err) {
+    console.error('Scan error:', err);
+    showToast('Erro: '+err.message,'error');
+    document.getElementById('progressSection').classList.remove('active');
+    document.getElementById('scanBtn').disabled=false;
+  }
+}
+
+// ── INIT ──────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', ()=>{
+  const ta = document.getElementById('newsText');
+  const cc = document.getElementById('charCount');
+  if (ta && cc) ta.addEventListener('input', ()=>{ cc.textContent=ta.value.length; });
 
   document.getElementById('scanBtn')?.addEventListener('click', runScan);
   document.getElementById('clearBtn')?.addEventListener('click', resetScan);
 
-  const preText = sessionStorage.getItem('vf_scan_text');
-  if (preText) {
-    if (preText.startsWith('http')) {
-      switchTab('url');
-      const u = document.getElementById('newsUrl'); if(u) u.value = preText;
-    } else {
-      const t = document.getElementById('newsText');
-      if (t) { t.value = preText; if(counter) counter.textContent = preText.length; }
-    }
+  const pre = sessionStorage.getItem('vf_scan_text');
+  if (pre) {
     sessionStorage.removeItem('vf_scan_text');
+    if (pre.startsWith('http')) {
+      switchTab('url');
+      const u=document.getElementById('newsUrl'); if(u) u.value=pre;
+    } else {
+      if(ta) ta.value=pre;
+      if(cc) cc.textContent=pre.length;
+    }
   }
 });

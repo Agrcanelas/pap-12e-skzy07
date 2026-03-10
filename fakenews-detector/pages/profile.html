@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="pt" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Perfil — VeriFact</title>
+  <link rel="stylesheet" href="../css/global.css?v=2"/>
+  <link rel="stylesheet" href="../css/footer.css?v=1"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    .profile-page { max-width: 720px; margin: 0 auto; padding: 100px 24px 80px; }
+    .profile-header { display:flex; align-items:center; gap:24px; margin-bottom:48px; flex-wrap:wrap; }
+    .profile-avatar-wrap { position:relative; cursor:pointer; }
+    .profile-avatar {
+      width:96px; height:96px; border-radius:50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display:flex; align-items:center; justify-content:center;
+      font-size:36px; font-weight:700; color:#000;
+      border:3px solid var(--border); overflow:hidden;
+      transition: border-color 0.2s;
+    }
+    .profile-avatar:hover { border-color:var(--accent); }
+    .avatar-edit-badge {
+      position:absolute; bottom:4px; right:4px;
+      background:var(--accent); color:#000; border-radius:50%;
+      width:26px; height:26px; display:flex; align-items:center; justify-content:center;
+      font-size:13px; font-weight:700; pointer-events:none;
+    }
+    .profile-meta h1 { font-family:var(--font-display); font-size:clamp(24px,4vw,36px); letter-spacing:1px; }
+    .profile-meta p  { color:var(--text3); font-size:14px; margin-top:4px; font-family:var(--font-mono); }
+    .profile-joined  { font-size:12px; color:var(--text3); margin-top:4px; }
+
+    .profile-card {
+      background:var(--surface); border:1px solid var(--border);
+      border-radius:var(--radius-lg); padding:28px; margin-bottom:20px;
+    }
+    .profile-card h2 {
+      font-family:var(--font-display); font-size:20px; letter-spacing:1px;
+      margin-bottom:24px; display:flex; align-items:center; gap:10px;
+    }
+    .form-row { display:flex; flex-direction:column; gap:6px; margin-bottom:20px; }
+    .form-row label { font-size:12px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--text3); }
+    .form-row input, .form-row textarea {
+      background:var(--surface2); border:1px solid var(--border);
+      border-radius:10px; padding:11px 14px; color:var(--text);
+      font-family:var(--font-main); font-size:14px; transition:border-color 0.2s;
+      width:100%;
+    }
+    .form-row input:focus, .form-row textarea:focus {
+      outline:none; border-color:var(--accent); background:var(--bg2);
+    }
+    .form-row input[disabled] { opacity:0.5; cursor:not-allowed; }
+    .form-row textarea { resize:vertical; min-height:80px; }
+    .pw-error { font-size:12px; color:var(--red); min-height:16px; margin-top:4px; }
+    .btn-save {
+      background:var(--accent); color:#000; border:none; border-radius:10px;
+      padding:12px 28px; font-size:14px; font-weight:700; cursor:pointer;
+      font-family:var(--font-main); transition:all 0.2s; width:100%;
+    }
+    .btn-save:hover { transform:translateY(-1px); box-shadow:0 4px 20px rgba(0,245,160,0.3); }
+    .btn-secondary {
+      background:var(--surface2); color:var(--text); border:1px solid var(--border);
+      border-radius:10px; padding:11px 24px; font-size:14px; font-weight:600;
+      cursor:pointer; font-family:var(--font-main); transition:all 0.2s;
+    }
+    .btn-secondary:hover { border-color:var(--accent); color:var(--accent); }
+    .btn-danger {
+      background:rgba(255,51,102,0.1); color:var(--red); border:1px solid rgba(255,51,102,0.3);
+      border-radius:10px; padding:11px 24px; font-size:14px; font-weight:600;
+      cursor:pointer; font-family:var(--font-main); transition:all 0.2s; width:100%;
+    }
+    .btn-danger:hover { background:rgba(255,51,102,0.2); }
+    .avatar-avatars-grid {
+      display:flex; gap:12px; flex-wrap:wrap; margin-top:12px;
+    }
+    .avatar-opt {
+      width:52px; height:52px; border-radius:50%; cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
+      font-size:22px; border:2px solid var(--border); transition:all 0.2s;
+    }
+    .avatar-opt:hover, .avatar-opt.selected { border-color:var(--accent); transform:scale(1.1); }
+    .section-divider { height:1px; background:var(--border); margin:8px 0 24px; }
+  </style>
+</head>
+<body>
+
+  <!-- NAVBAR (preenchida pelo auth.js) -->
+  <nav class="navbar" id="navbar">
+    <div class="nav-inner">
+      <a href="../index.html" class="logo">
+        <span class="logo-icon">⚡</span>
+        <span class="logo-text">VERI<span class="accent">FACT</span></span>
+      </a>
+      <ul class="nav-links"></ul>
+      <div class="nav-controls">
+        <div class="lang-select">
+          <button class="ctrl-btn" title="Idioma">🌐</button>
+          <div class="lang-dropdown">
+            <button onclick="setLang('pt')" class="lang-opt">🇵🇹 Português</button>
+            <button onclick="setLang('en')" class="lang-opt">🇬🇧 English</button>
+            <button onclick="setLang('es')" class="lang-opt">🇪🇸 Español</button>
+            <button onclick="setLang('fr')" class="lang-opt">🇫🇷 Français</button>
+          </div>
+        </div>
+        <button class="ctrl-btn theme-toggle" id="themeToggle" title="Tema">🌙</button>
+        <button class="ctrl-btn mobile-menu-btn" id="mobileMenu">☰</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="mobile-nav" id="mobileNav"></div>
+
+  <div class="profile-page" id="profileWrap">
+
+    <!-- HEADER -->
+    <div class="profile-header">
+      <div class="profile-avatar-wrap" onclick="document.getElementById('avatarInput').click()">
+        <div class="profile-avatar" id="profAvatarPreview">?</div>
+        <div class="avatar-edit-badge">✏️</div>
+      </div>
+      <div class="profile-meta">
+        <h1 id="profHeaderName">Perfil</h1>
+        <p id="profHeaderEmail"></p>
+        <div class="profile-joined" id="profJoined"></div>
+      </div>
+    </div>
+
+    <input type="file" id="avatarInput" accept="image/*" style="display:none"/>
+    <input type="hidden" id="profAvatarData"/>
+
+    <!-- INFORMAÇÕES PESSOAIS -->
+    <div class="profile-card">
+      <h2>👤 Informações Pessoais</h2>
+
+      <div style="margin-bottom:20px">
+        <div style="font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:10px">Avatar rápido</div>
+        <div class="avatar-avatars-grid" id="emojiAvatarGrid">
+          <!-- preenchido pelo JS -->
+        </div>
+      </div>
+      <div class="section-divider"></div>
+
+      <div class="form-row">
+        <label>Nome de utilizador</label>
+        <input type="text" id="profName" placeholder="O teu nome" maxlength="60"/>
+      </div>
+      <div class="form-row">
+        <label>Email</label>
+        <input type="email" id="profEmail" disabled/>
+      </div>
+      <div class="form-row">
+        <label>Biografia (opcional)</label>
+        <textarea id="profBio" placeholder="Escreve algo sobre ti..."></textarea>
+      </div>
+      <button class="btn-save" id="profSaveBtn">💾 Guardar Alterações</button>
+    </div>
+
+    <!-- ALTERAR PALAVRA-PASSE -->
+    <div class="profile-card">
+      <h2>🔒 Alterar Palavra-passe</h2>
+      <div class="form-row">
+        <label>Palavra-passe atual</label>
+        <input type="password" id="profPwCurrent" placeholder="••••••••"/>
+      </div>
+      <div class="form-row">
+        <label>Nova palavra-passe</label>
+        <input type="password" id="profPwNew" placeholder="Mínimo 6 caracteres"/>
+      </div>
+      <div class="form-row">
+        <label>Confirmar nova palavra-passe</label>
+        <input type="password" id="profPwConfirm" placeholder="Repetir palavra-passe"/>
+      </div>
+      <div class="pw-error" id="profPwError"></div>
+      <button class="btn-secondary" id="profPwBtn" style="width:100%">🔑 Alterar Palavra-passe</button>
+    </div>
+
+    <!-- ESTATÍSTICAS -->
+    <div class="profile-card">
+      <h2>📊 As Minhas Estatísticas</h2>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:16px" id="profStats">
+        <div style="text-align:center;padding:16px;background:var(--surface2);border-radius:12px">
+          <div style="font-family:var(--font-display);font-size:32px;color:var(--accent2)" id="statTotal">0</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:4px">Verificações</div>
+        </div>
+        <div style="text-align:center;padding:16px;background:var(--surface2);border-radius:12px">
+          <div style="font-family:var(--font-display);font-size:32px;color:var(--red)" id="statFake">0</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:4px">Falsas</div>
+        </div>
+        <div style="text-align:center;padding:16px;background:var(--surface2);border-radius:12px">
+          <div style="font-family:var(--font-display);font-size:32px;color:var(--green)" id="statReal">0</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:4px">Verdadeiras</div>
+        </div>
+        <div style="text-align:center;padding:16px;background:var(--surface2);border-radius:12px">
+          <div style="font-family:var(--font-display);font-size:32px;color:var(--yellow)" id="statSusp">0</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:4px">Suspeitas</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ZONA DE PERIGO -->
+    <div class="profile-card" style="border-color:rgba(255,51,102,0.25)">
+      <h2>⚠️ Zona de Perigo</h2>
+      <p style="color:var(--text3);font-size:14px;margin-bottom:16px">Ao apagar a conta, todos os teus dados serão eliminados permanentemente.</p>
+      <button class="btn-danger" id="profDeleteBtn">🗑️ Apagar Conta Permanentemente</button>
+    </div>
+
+  </div>
+
+  <script src="../js/theme.js"></script>
+  <script src="../js/i18n.js"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/auth.js"></script>
+
+</html>
+  <footer class="footer">
+    <div class="footer-main">
+
+      <!-- Coluna 1: Brand -->
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-logo">
+          <span class="logo-icon">⚡</span>
+          <span class="logo-text">VERI<span class="accent">FACT</span></span>
+        </a>
+        <p class="footer-tagline">Combatendo a desinformação com<br>inteligência artificial.</p>
+        <div class="footer-badges">
+          <span class="footer-badge">🤖 Groq AI</span>
+          <span class="footer-badge">🔍 Fact Check API</span>
+          <span class="footer-badge">📰 NewsAPI</span>
+        </div>
+      </div>
+
+      <!-- Coluna 2: Navegação -->
+      <div class="footer-col">
+        <div class="footer-col-title">Navegação</div>
+        <ul class="footer-nav">
+          <li><a href="../index.html">🏠 Início</a></li>
+          <li><a href="scan.html">🔍 Verificar Notícia</a></li>
+          <li><a href="news.html">📰 Notícias</a></li>
+          <li><a href="history.html">📂 Histórico</a></li>
+          <li><a href="profile.html">👤 Perfil</a></li>
+        </ul>
+      </div>
+
+      <!-- Coluna 3: Conta -->
+      <div class="footer-col">
+        <div class="footer-col-title">Conta</div>
+        <ul class="footer-nav">
+          <li><a href="login.html">🔑 Entrar</a></li>
+          <li><a href="register.html">✨ Registar</a></li>
+        </ul>
+        <div class="footer-col-title" style="margin-top:20px">Tecnologias</div>
+        <ul class="footer-nav">
+          <li><a href="https://groq.com" target="_blank">Groq (LLaMA 3.3)</a></li>
+          <li><a href="https://developers.google.com/fact-check/tools/api" target="_blank">Google Fact Check</a></li>
+          <li><a href="https://newsapi.org" target="_blank">NewsAPI</a></li>
+        </ul>
+      </div>
+
+      <!-- Coluna 4: Projeto -->
+      <div class="footer-col">
+        <div class="footer-col-title">Projeto PAP</div>
+        <p class="footer-about">O VeriFact é um projeto desenvolvido no âmbito da Prova de Aptidão Profissional (PAP), com o objetivo de combater a desinformação através de tecnologias de IA.</p>
+        <div class="footer-stats">
+          <div class="footer-stat">
+            <span class="footer-stat-num">3</span>
+            <span class="footer-stat-label">APIs integradas</span>
+          </div>
+          <div class="footer-stat">
+            <span class="footer-stat-num">IA</span>
+            <span class="footer-stat-label">LLaMA 3.3 70B</span>
+          </div>
+          <div class="footer-stat">
+            <span class="footer-stat-num">100%</span>
+            <span class="footer-stat-label">Gratuito</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Bottom bar -->
+    <div class="footer-bottom">
+      <div class="footer-bottom-inner">
+        <span>© 2025 VeriFact · Projeto PAP · Feito com ❤️ e IA</span>
+        <div class="footer-bottom-links">
+          <span class="footer-disclaimer">⚠️ As análises são geradas por IA e podem conter erros. Verifica sempre as fontes originais.</span>
+        </div>
+
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
