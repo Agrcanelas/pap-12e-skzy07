@@ -7,7 +7,7 @@
 // --- ALTERA ESTES VALORES para o teu ambiente ---
 define('DB_HOST', 'sql110.infinityfree.com');
 define('DB_PORT', '3306');
-define('DB_NAME', 'f0_41355675_verifact');
+define('DB_NAME', 'if0_41355675_verifact');
 define('DB_USER', 'if0_41355675');       
 define('DB_PASS', 'Pro352503');           
 define('DB_CHARSET', 'utf8mb4');
