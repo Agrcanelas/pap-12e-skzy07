@@ -1,9 +1,15 @@
 <?php
-define('DB_HOST',    'sql110.infinityfree.com');
-define('DB_PORT',    '3306');
-define('DB_NAME',    'f0_41355675_verifact');
-define('DB_USER',    'if0_41355675');
-define('DB_PASS',    'Pro352503');
+// ============================================================
+//  VeriFact — Configuração da Base de Dados
+//  Ficheiro: backend/config/db.php
+// ============================================================
+
+// --- ALTERA ESTES VALORES para o teu ambiente ---
+define('DB_HOST', 'localhost');
+define('DB_PORT', '3306');
+define('DB_NAME', 'verifact');
+define('DB_USER', 'root');       // utilizador MySQL
+define('DB_PASS', '');           // palavra-passe MySQL (vazio no XAMPP/WAMP por defeito)
 define('DB_CHARSET', 'utf8mb4');
 
 define('JWT_SECRET',      'verifact_secret_2025_muda_isto_em_producao');
