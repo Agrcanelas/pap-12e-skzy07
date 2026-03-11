@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="pt" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Entrar — VeriFact</title>
+  <link rel="stylesheet" href="../css/global.css?v=2"/>
+  <link rel="stylesheet" href="../css/auth.css"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+
+    <!-- NAVBAR (preenchida dinamicamente pelo auth.js) -->
+  <nav class="navbar" id="navbar">
+    <div class="nav-inner">
+      <a href="../index.html" class="logo">
+        <span class="logo-icon">⚡</span>
+        <span class="logo-text">VERI<span class="accent">FACT</span></span>
+      </a>
+      <ul class="nav-links"></ul>
+      <div class="nav-controls">
+        <div class="lang-select">
+          <button class="ctrl-btn" id="langBtn" title="Idioma">🌐</button>
+          <div class="lang-dropdown" id="langDropdown">
+            <button onclick="setLang('pt')" class="lang-opt">🇵🇹 Português</button>
+            <button onclick="setLang('en')" class="lang-opt">🇬🇧 English</button>
+            <button onclick="setLang('es')" class="lang-opt">🇪🇸 Español</button>
+            <button onclick="setLang('fr')" class="lang-opt">🇫🇷 Français</button>
+          </div>
+        </div>
+        <button class="ctrl-btn theme-toggle" id="themeToggle" title="Tema">🌙</button>
+        <button class="ctrl-btn mobile-menu-btn" id="mobileMenu">☰</button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- MOBILE MENU (preenchido pelo auth.js) -->
+  <div class="mobile-nav" id="mobileNav"></div>
+
+  <div class="auth-page">
+    <!-- Visual side -->
+    <div class="auth-visual">
+      <div class="auth-visual-bg"></div>
+      <div class="auth-visual-content">
+        <span class="auth-visual-icon">🔐</span>
+        <h2>VeriFact</h2>
+        <p>Entra na tua conta para aceder ao histórico de verificações e relatórios guardados.</p>
+        <div class="auth-visual-features">
+          <div class="auth-feature">
+            <span class="auth-feature-icon">📊</span>
+            Histórico de todas as verificações
+          </div>
+          <div class="auth-feature">
+            <span class="auth-feature-icon">📄</span>
+            Relatórios PDF guardados
+          </div>
+          <div class="auth-feature">
+            <span class="auth-feature-icon">⚡</span>
+            Análises prioritárias mais rápidas
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Form side -->
+    <div class="auth-form-section">
+      <div class="auth-form-box">
+        <a href="../index.html" class="auth-logo-top">
+          VERI<span class="accent">FACT</span>
+        </a>
+        <h1 class="auth-title" data-i18n="login_title">Bem-vindo de volta</h1>
+        <p class="auth-sub">
+          <span data-i18n="login_sub">Não tens conta? </span>
+          <a href="register.html" data-i18n="login_sub2">Regista-te</a>
+        </p>
+
+        <div id="loginError" class="form-error"></div>
+
+        <form class="auth-form" id="loginForm" novalidate>
+          <div class="form-group">
+            <label class="form-label" data-i18n="label_email">Email</label>
+            <div class="input-with-icon">
+              <span class="input-icon">✉️</span>
+              <input type="email" class="form-input" id="loginEmail"
+                data-i18n-placeholder="ph_email" placeholder="email@exemplo.com" required autocomplete="email"/>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" data-i18n="label_password">Palavra-passe</label>
+            <div class="input-with-icon">
+              <span class="input-icon">🔒</span>
+              <input type="password" class="form-input" id="loginPassword"
+                placeholder="A tua palavra-passe" required autocomplete="current-password"/>
+              <button type="button" class="pw-toggle" id="togglePw">👁</button>
+            </div>
+            <div class="forgot-link">
+              <a href="forgot-password.html">Esqueceste a palavra-passe?</a>
+            </div>
+          </div>
+
+          <button type="submit" class="auth-btn" id="loginBtn" data-i18n="login_btn">
+            Entrar
+          </button>
+        </form>
+
+        <!-- Divisor -->
+        <div class="auth-divider">
+          <span>ou continua com</span>
+        </div>
+
+        <!-- Login com Google -->
+        <div id="g_id_onload"
+          data-client_id="913609694524-0slri1aoutqpkk0n7303kkio4hb6igt4.apps.googleusercontent.com"
+          data-callback="handleGoogleLogin"
+          data-auto_prompt="false">
+        </div>
+        <button class="auth-google-btn" id="googleLoginBtn">
+          <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
+          Continuar com Google
+        </button>
+
+
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/i18n.js"></script>
+  <script src="../js/theme.js"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/auth.js"></script>
+  <footer class="footer">
+    <div class="footer-main">
+
+      <!-- Coluna 1: Brand -->
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-logo">
+          <span class="logo-icon">⚡</span>
+          <span class="logo-text">VERI<span class="accent">FACT</span></span>
+        </a>
+        <p class="footer-tagline">Combatendo a desinformação com<br>inteligência artificial.</p>
+        <div class="footer-badges">
+          <span class="footer-badge">🤖 Groq AI</span>
+          <span class="footer-badge">🔍 Fact Check API</span>
+          <span class="footer-badge">📰 NewsAPI</span>
+        </div>
+      </div>
+
+      <!-- Coluna 2: Navegação -->
+      <div class="footer-col">
+        <div class="footer-col-title">Navegação</div>
+        <ul class="footer-nav">
+          <li><a href="../index.html">🏠 Início</a></li>
+          <li><a href="scan.html">🔍 Verificar Notícia</a></li>
+          <li><a href="news.html">📰 Notícias</a></li>
+          <li><a href="history.html">📂 Histórico</a></li>
+          <li><a href="profile.html">👤 Perfil</a></li>
+        </ul>
+      </div>
+
+      <!-- Coluna 3: Conta -->
+      <div class="footer-col">
+        <div class="footer-col-title">Conta</div>
+        <ul class="footer-nav">
+          <li><a href="login.html">🔑 Entrar</a></li>
+          <li><a href="register.html">✨ Registar</a></li>
+        </ul>
+        <div class="footer-col-title" style="margin-top:20px">Tecnologias</div>
+        <ul class="footer-nav">
+          <li><a href="https://groq.com" target="_blank">Groq (LLaMA 3.3)</a></li>
+          <li><a href="https://developers.google.com/fact-check/tools/api" target="_blank">Google Fact Check</a></li>
+          <li><a href="https://newsapi.org" target="_blank">NewsAPI</a></li>
+        </ul>
+      </div>
+
+      <!-- Coluna 4: Projeto -->
+      <div class="footer-col">
+        <div class="footer-col-title">Projeto PAP</div>
+        <p class="footer-about">O VeriFact é um projeto desenvolvido no âmbito da Prova de Aptidão Profissional (PAP), com o objetivo de combater a desinformação através de tecnologias de IA.</p>
+        <div class="footer-stats">
+          <div class="footer-stat">
+            <span class="footer-stat-num">3</span>
+            <span class="footer-stat-label">APIs integradas</span>
+          </div>
+          <div class="footer-stat">
+            <span class="footer-stat-num">IA</span>
+            <span class="footer-stat-label">LLaMA 3.3 70B</span>
+          </div>
+          <div class="footer-stat">
+            <span class="footer-stat-num">100%</span>
+            <span class="footer-stat-label">Gratuito</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Bottom bar -->
+    <div class="footer-bottom">
+      <div class="footer-bottom-inner">
+        <span>© 2025 VeriFact · Projeto PAP · Feito com ❤️ e IA</span>
+        <div class="footer-bottom-links">
+          <span class="footer-disclaimer">⚠️ As análises são geradas por IA e podem conter erros. Verifica sempre as fontes originais.</span>
+        </div>
+
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
