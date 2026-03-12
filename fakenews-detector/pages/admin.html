@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="pt" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Painel Admin — VeriFact</title>
+  <link rel="stylesheet" href="../css/global.css?v=3"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    body { background: var(--bg); color: var(--text); font-family: var(--font-main); }
+    .admin-layout { display: flex; min-height: 100vh; padding-top: 64px; }
+
+    /* Sidebar */
+    .admin-sidebar {
+      width: 220px; background: var(--surface); border-right: 1px solid var(--border);
+      padding: 24px 0; position: fixed; top: 64px; left: 0; height: calc(100vh - 64px);
+      display: flex; flex-direction: column; gap: 4px; z-index: 10;
+    }
+    .sidebar-title {
+      font-size: 10px; font-weight: 700; letter-spacing: 2px; color: var(--text3);
+      padding: 0 20px 12px; text-transform: uppercase; border-bottom: 1px solid var(--border); margin-bottom: 8px;
+    }
+    .sidebar-btn {
+      display: flex; align-items: center; gap: 10px; padding: 10px 20px;
+      color: var(--text2); font-size: 14px; font-weight: 500; cursor: pointer;
+      border: none; background: none; width: 100%; text-align: left; transition: all 0.2s;
+      border-left: 3px solid transparent;
+    }
+    .sidebar-btn:hover { background: var(--surface2); color: var(--text); }
+    .sidebar-btn.active { color: var(--accent2); border-left-color: var(--accent2); background: rgba(0,212,255,0.06); }
+    .sidebar-btn .sb-icon { font-size: 16px; width: 20px; text-align: center; }
+
+    /* Main */
+    .admin-main { margin-left: 220px; flex: 1; padding: 32px; max-width: calc(100vw - 220px); }
+
+    /* Header */
+    .admin-header { margin-bottom: 28px; }
+    .admin-header h1 { font-family: var(--font-display); font-size: 28px; letter-spacing: 2px; color: var(--text); margin: 0 0 4px; }
+    .admin-header p { color: var(--text3); font-size: 14px; margin: 0; }
+
+    /* Stats grid */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 32px; }
+    .stat-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 20px; display: flex; flex-direction: column; gap: 6px;
+    }
+    .stat-card .stat-icon { font-size: 24px; }
+    .stat-card .stat-num { font-size: 28px; font-weight: 700; color: var(--accent2); font-family: var(--font-mono); }
+    .stat-card .stat-label { font-size: 12px; color: var(--text3); text-transform: uppercase; letter-spacing: 1px; }
+
+    /* Secções */
+    .admin-section { display: none; }
+    .admin-section.active { display: block; }
+
+    /* Tabelas */
+    .admin-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .admin-table-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .admin-table-header h3 { margin: 0; font-size: 15px; color: var(--text); }
+    .admin-search { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; color: var(--text); font-size: 13px; outline: none; width: 220px; }
+    .admin-search:focus { border-color: var(--accent2); }
+    table { width: 100%; border-collapse: collapse; }
+    th { padding: 10px 16px; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--text3); background: var(--surface2); text-align: left; border-bottom: 1px solid var(--border); }
+    td { padding: 12px 16px; font-size: 13px; color: var(--text2); border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+
+    /* Badges */
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; }
+    .badge-admin  { background: rgba(0,212,255,0.15); color: #00d4ff; }
+    .badge-user   { background: rgba(160,160,192,0.12); color: #a0a0c0; }
+    .badge-active { background: rgba(0,220,140,0.15); color: #00dc8c; }
+    .badge-inactive { background: rgba(220,50,80,0.15); color: #dc3250; }
+    .badge-fake   { background: rgba(220,50,80,0.15); color: #dc3250; }
+    .badge-real   { background: rgba(0,220,140,0.15); color: #00dc8c; }
+    .badge-suspicious { background: rgba(220,180,0,0.15); color: #dcb400; }
+
+    /* Botões de ação */
+    .btn-action { padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid; transition: all 0.2s; }
+    .btn-danger  { background: rgba(220,50,80,0.1);  border-color: rgba(220,50,80,0.3);  color: #dc3250; }
+    .btn-danger:hover  { background: rgba(220,50,80,0.25); }
+    .btn-warn    { background: rgba(220,180,0,0.1);  border-color: rgba(220,180,0,0.3);  color: #dcb400; }
+    .btn-warn:hover    { background: rgba(220,180,0,0.25); }
+    .btn-success { background: rgba(0,220,140,0.1);  border-color: rgba(0,220,140,0.3);  color: #00dc8c; }
+    .btn-success:hover { background: rgba(0,220,140,0.25); }
+    .btn-actions { display: flex; gap: 6px; }
+
+    /* Paginação */
+    .pagination { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 16px; border-top: 1px solid var(--border); }
+    .page-btn { padding: 6px 14px; border-radius: 6px; background: var(--surface2); border: 1px solid var(--border); color: var(--text2); cursor: pointer; font-size: 13px; transition: all 0.2s; }
+    .page-btn:hover, .page-btn.active { background: var(--accent2); color: #000; border-color: var(--accent2); }
+    .page-info { font-size: 13px; color: var(--text3); }
+
+    /* Gráfico veredictos */
+    .verdict-chart { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 16px; }
+    .verdict-bar-wrap { flex: 1; min-width: 120px; }
+    .verdict-bar-label { font-size: 12px; color: var(--text3); margin-bottom: 6px; display: flex; justify-content: space-between; }
+    .verdict-bar-bg { background: var(--surface2); border-radius: 4px; height: 8px; overflow: hidden; }
+    .verdict-bar-fill { height: 100%; border-radius: 4px; transition: width 1s ease; }
+
+    /* Avatar pequeno */
+    .user-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--accent2); display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #000; overflow: hidden; flex-shrink: 0; }
+    .user-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .user-cell { display: flex; align-items: center; gap: 10px; }
+
+    .empty-msg { padding: 40px; text-align: center; color: var(--text3); font-size: 14px; }
+    .loading-msg { padding: 40px; text-align: center; color: var(--text3); }
+
+    @media (max-width: 768px) {
+      .admin-sidebar { display: none; }
+      .admin-main { margin-left: 0; max-width: 100vw; padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar" id="navbar">
+    <div class="nav-inner">
+      <a href="../index.html" class="logo">
+        <span class="logo-icon">⚡</span>
+        <span class="logo-text">VERI<span class="accent">FACT</span></span>
+      </a>
+      <ul class="nav-links"></ul>
+      <div class="nav-controls">
+        <button class="ctrl-btn theme-toggle" id="themeToggle" title="Tema">🌙</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="admin-layout">
+    <!-- Sidebar -->
+    <aside class="admin-sidebar">
+      <div class="sidebar-title">Painel Admin</div>
+      <button class="sidebar-btn active" onclick="showSection('dashboard')" id="btn-dashboard">
+        <span class="sb-icon">📊</span> Dashboard
+      </button>
+      <button class="sidebar-btn" onclick="showSection('users')" id="btn-users">
+        <span class="sb-icon">👥</span> Utilizadores
+      </button>
+      <button class="sidebar-btn" onclick="showSection('scans')" id="btn-scans">
+        <span class="sb-icon">🔍</span> Verificações
+      </button>
+      <div style="margin-top:auto;padding:16px 20px;border-top:1px solid var(--border)">
+        <a href="../index.html" style="color:var(--text3);font-size:13px;text-decoration:none;">← Voltar ao site</a>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="admin-main">
+
+      <!-- DASHBOARD -->
+      <section class="admin-section active" id="section-dashboard">
+        <div class="admin-header">
+          <h1>DASHBOARD</h1>
+          <p>Visão geral da plataforma VeriFact</p>
+        </div>
+        <div class="stats-grid" id="statsGrid">
+          <div class="stat-card"><div class="stat-icon">⏳</div><div class="stat-num">—</div><div class="stat-label">A carregar...</div></div>
+        </div>
+        <div class="admin-table-wrap" style="margin-top:8px">
+          <div class="admin-table-header"><h3>Distribuição de Veredictos</h3></div>
+          <div style="padding:20px" id="verdictChart"><div class="loading-msg">A carregar...</div></div>
+        </div>
+      </section>
+
+      <!-- UTILIZADORES -->
+      <section class="admin-section" id="section-users">
+        <div class="admin-header">
+          <h1>UTILIZADORES</h1>
+          <p>Gerir todos os utilizadores registados</p>
+        </div>
+        <div class="admin-table-wrap">
+          <div class="admin-table-header">
+            <h3 id="usersTitle">Utilizadores</h3>
+            <input class="admin-search" id="userSearch" placeholder="Pesquisar nome ou email..." oninput="searchUsers()"/>
+          </div>
+          <div id="usersTableWrap"><div class="loading-msg">A carregar...</div></div>
+          <div class="pagination" id="usersPagination"></div>
+        </div>
+      </section>
+
+      <!-- VERIFICAÇÕES -->
+      <section class="admin-section" id="section-scans">
+        <div class="admin-header">
+          <h1>VERIFICAÇÕES</h1>
+          <p>Todas as verificações feitas na plataforma</p>
+        </div>
+        <div class="admin-table-wrap">
+          <div class="admin-table-header">
+            <h3 id="scansTitle">Verificações</h3>
+          </div>
+          <div id="scansTableWrap"><div class="loading-msg">A carregar...</div></div>
+          <div class="pagination" id="scansPagination"></div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="../js/i18n.js?v=3"></script>
+  <script src="../js/theme.js?v=3"></script>
+  <script src="../js/api.js?v=3"></script>
+  <script src="../js/auth.js?v=3"></script>
+  <script>
+    const _h = window.location.href;
+    const ADMIN_API = (_h.includes('/fakenews-detector/')
+      ? _h.split('/fakenews-detector/')[0]
+      : window.location.origin) + '/fakenews-detector/backend/core/admin.php';
+
+    let usersPage = 0, scansPage = 0;
+    const PER_PAGE = 15;
+    let searchTimer = null;
+
+    // ── Verificar se é admin ──────────────────────────────
+    document.addEventListener('DOMContentLoaded', async () => {
+      const user = VF_getUser();
+      if (!user || !VF_isLoggedIn()) {
+        window.location.href = 'login.html'; return;
+      }
+      if (user.role !== 'admin') {
+        document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px"><div style="font-size:64px">🚫</div><div style="font-size:24px;font-weight:700">Acesso Negado</div><div style="color:#888">Não tens permissões de administrador.</div><a href="../index.html" style="margin-top:16px;color:#00d4ff">← Voltar ao início</a></div>';
+        return;
+      }
+      loadDashboard();
+      loadUsers();
+      loadScans();
+    });
+
+    // ── Navegação sidebar ──────────────────────────────────
+    function showSection(name) {
+      document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.sidebar-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('section-' + name).classList.add('active');
+      document.getElementById('btn-' + name).classList.add('active');
+    }
+
+    // ── Helpers ────────────────────────────────────────────
+    function adminFetch(params) {
+      const token = localStorage.getItem('vf_token') || '';
+      return fetch(ADMIN_API + '?' + params + (token ? '&_token=' + token : ''), {
+        headers: { 'Authorization': 'Bearer ' + token }
+      }).then(r => r.json());
+    }
+    function adminPost(action, body) {
+      const token = localStorage.getItem('vf_token') || '';
+      return fetch(ADMIN_API + '?action=' + action + (token ? '&_token=' + token : ''), {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify(body)
+      }).then(r => r.json());
+    }
+    function adminDelete(action, id) {
+      const token = localStorage.getItem('vf_token') || '';
+      return fetch(ADMIN_API + '?action=' + action + '&id=' + id + (token ? '&_token=' + token : ''), {
+        method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token }
+      }).then(r => r.json());
+    }
+
+    // ── DASHBOARD ──────────────────────────────────────────
+    async function loadDashboard() {
+      const data = await adminFetch('action=stats');
+      if (!data.success) return;
+      const s = data.data;
+
+      const verdictMap = {};
+      (s.verdicts || []).forEach(v => verdictMap[v.verdict] = parseInt(v.total));
+      const totalV = Object.values(verdictMap).reduce((a,b)=>a+b,0)||1;
+
+      document.getElementById('statsGrid').innerHTML = `
+        <div class="stat-card"><div class="stat-icon">👥</div><div class="stat-num">${s.total_users}</div><div class="stat-label">Utilizadores</div></div>
+        <div class="stat-card"><div class="stat-icon">🔍</div><div class="stat-num">${s.total_scans}</div><div class="stat-label">Verificações</div></div>
+        <div class="stat-card"><div class="stat-icon">📄</div><div class="stat-num">${s.total_reports}</div><div class="stat-label">Relatórios PDF</div></div>
+        <div class="stat-card"><div class="stat-icon">📅</div><div class="stat-num">${s.scans_today}</div><div class="stat-label">Scans Hoje</div></div>
+        <div class="stat-card"><div class="stat-icon">🆕</div><div class="stat-num">${s.users_this_week}</div><div class="stat-label">Novos (7 dias)</div></div>
+        <div class="stat-card"><div class="stat-icon">📊</div><div class="stat-num">${s.avg_reliability}%</div><div class="stat-label">Média Fiabilidade</div></div>
+      `;
+
+      document.getElementById('verdictChart').innerHTML = `
+        <div class="verdict-chart">
+          ${[['fake','Falso','#dc3250'],['suspicious','Suspeito','#dcb400'],['real','Verdadeiro','#00dc8c']].map(([v,l,c])=>`
+            <div class="verdict-bar-wrap">
+              <div class="verdict-bar-label"><span>${l}</span><span style="color:${c};font-weight:700">${verdictMap[v]||0}</span></div>
+              <div class="verdict-bar-bg"><div class="verdict-bar-fill" style="width:${Math.round(((verdictMap[v]||0)/totalV)*100)}%;background:${c}"></div></div>
+            </div>
+          `).join('')}
+        </div>
+        <div style="margin-top:16px;font-size:12px;color:var(--text3);text-align:right">${totalV} verificações no total</div>
+      `;
+    }
+
+    // ── UTILIZADORES ───────────────────────────────────────
+    async function loadUsers(page=0, search='') {
+      usersPage = page;
+      const data = await adminFetch(`action=users&limit=${PER_PAGE}&offset=${page*PER_PAGE}&search=${encodeURIComponent(search)}`);
+      if (!data.success) { document.getElementById('usersTableWrap').innerHTML='<div class="empty-msg">Erro ao carregar.</div>'; return; }
+
+      const { users, total } = data.data;
+      document.getElementById('usersTitle').textContent = `Utilizadores (${total})`;
+
+      if (!users.length) { document.getElementById('usersTableWrap').innerHTML='<div class="empty-msg">Nenhum utilizador encontrado.</div>'; return; }
+
+      document.getElementById('usersTableWrap').innerHTML = `
+        <table>
+          <thead><tr><th>Utilizador</th><th>Email</th><th>Role</th><th>Estado</th><th>Scans</th><th>Registo</th><th>Ações</th></tr></thead>
+          <tbody>${users.map(u => `
+            <tr>
+              <td><div class="user-cell">
+                <div class="user-avatar">${u.avatar?'<img src="'+u.avatar+'">':u.name[0].toUpperCase()}</div>
+                <span>${u.name}</span>
+              </div></td>
+              <td style="color:var(--text3)">${u.email}</td>
+              <td><span class="badge badge-${u.role}">${u.role}</span></td>
+              <td><span class="badge badge-${u.is_active?'active':'inactive'}">${u.is_active?'Ativo':'Inativo'}</span></td>
+              <td style="font-family:var(--font-mono)">${u.total_scans}</td>
+              <td style="color:var(--text3);font-size:12px">${new Date(u.created_at).toLocaleDateString('pt-PT')}</td>
+              <td><div class="btn-actions">
+                ${u.role!=='admin'?`<button class="btn-action btn-warn" onclick="toggleRole(${u.id},'${u.role}')">
+                  ${u.role==='admin'?'→ User':'→ Admin'}
+                </button>`:''}
+                <button class="btn-action btn-warn" onclick="toggleUser(${u.id},this)">
+                  ${u.is_active?'Desativar':'Ativar'}
+                </button>
+                ${u.role!=='admin'?`<button class="btn-action btn-danger" onclick="deleteUser(${u.id})">Apagar</button>`:''}
+              </div></td>
+            </tr>
+          `).join('')}</tbody>
+        </table>
+      `;
+
+      renderPagination('usersPagination', total, page, (p) => loadUsers(p, document.getElementById('userSearch').value));
+    }
+
+    function searchUsers() {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => loadUsers(0, document.getElementById('userSearch').value), 400);
+    }
+
+    async function toggleRole(userId, currentRole) {
+      const newRole = currentRole === 'admin' ? 'user' : 'admin';
+      if (!confirm(`Alterar role para "${newRole}"?`)) return;
+      const r = await adminPost('setRole', { user_id: userId, role: newRole });
+      if (r.success) { VF_toast('Role atualizado!', 'success'); loadUsers(usersPage); }
+      else VF_toast(r.error||'Erro', 'error');
+    }
+
+    async function toggleUser(userId, btn) {
+      const r = await adminPost('toggleUser', { user_id: userId });
+      if (r.success) { VF_toast('Estado atualizado!', 'success'); loadUsers(usersPage); }
+      else VF_toast(r.error||'Erro', 'error');
+    }
+
+    async function deleteUser(userId) {
+      if (!confirm('Apagar este utilizador? Esta ação é irreversível.')) return;
+      const r = await adminDelete('deleteUser', userId);
+      if (r.success) { VF_toast('Utilizador apagado.', 'success'); loadUsers(usersPage); loadDashboard(); }
+      else VF_toast(r.error||'Erro', 'error');
+    }
+
+    // ── VERIFICAÇÕES ───────────────────────────────────────
+    async function loadScans(page=0) {
+      scansPage = page;
+      const data = await adminFetch(`action=scans&limit=${PER_PAGE}&offset=${page*PER_PAGE}`);
+      if (!data.success) { document.getElementById('scansTableWrap').innerHTML='<div class="empty-msg">Erro ao carregar.</div>'; return; }
+
+      const { scans, total } = data.data;
+      document.getElementById('scansTitle').textContent = `Verificações (${total})`;
+
+      if (!scans.length) { document.getElementById('scansTableWrap').innerHTML='<div class="empty-msg">Nenhuma verificação encontrada.</div>'; return; }
+
+      const vLabel = v => v==='fake'?'Falso':v==='real'?'Verdadeiro':'Suspeito';
+
+      document.getElementById('scansTableWrap').innerHTML = `
+        <table>
+          <thead><tr><th>Texto</th><th>Veredicto</th><th>Fiabilidade</th><th>Utilizador</th><th>Data</th><th>Ações</th></tr></thead>
+          <tbody>${scans.map(s => `
+            <tr>
+              <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text2)"
+                  title="${(s.input_text||'').replace(/"/g,'&quot;')}">${(s.input_text||'').slice(0,80)}${s.input_text?.length>80?'...':''}</td>
+              <td><span class="badge badge-${s.verdict}">${vLabel(s.verdict)}</span></td>
+              <td style="font-family:var(--font-mono);color:${s.verdict==='fake'?'#dc3250':s.verdict==='real'?'#00dc8c':'#dcb400'}">${s.reliability}%</td>
+              <td style="font-size:12px;color:var(--text3)">${s.user_name||'—'}</td>
+              <td style="font-size:12px;color:var(--text3)">${new Date(s.created_at).toLocaleDateString('pt-PT')}</td>
+              <td><button class="btn-action btn-danger" onclick="deleteScan(${s.id})">Apagar</button></td>
+            </tr>
+          `).join('')}</tbody>
+        </table>
+      `;
+
+      renderPagination('scansPagination', total, page, loadScans);
+    }
+
+    async function deleteScan(id) {
+      if (!confirm('Apagar esta verificação?')) return;
+      const r = await adminDelete('deleteScan', id);
+      if (r.success) { VF_toast('Verificação apagada.', 'success'); loadScans(scansPage); loadDashboard(); }
+      else VF_toast(r.error||'Erro', 'error');
+    }
+
+    // ── PAGINAÇÃO ──────────────────────────────────────────
+    function renderPagination(elId, total, current, callback) {
+      const totalPages = Math.ceil(total / PER_PAGE);
+      if (totalPages <= 1) { document.getElementById(elId).innerHTML = ''; return; }
+      let html = `<button class="page-btn" onclick="(${callback})(${current-1})" ${current===0?'disabled':''}>← Anterior</button>`;
+      html += `<span class="page-info">Página ${current+1} de ${totalPages}</span>`;
+      html += `<button class="page-btn" onclick="(${callback})(${current+1})" ${current>=totalPages-1?'disabled':''}>Próxima →</button>`;
+      document.getElementById(elId).innerHTML = html;
+    }
+  </script>
+</body>
+</html>

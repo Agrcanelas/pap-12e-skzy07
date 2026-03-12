@@ -29,7 +29,12 @@ function VF_isLoggedIn() {
 
 // ── 2. HTTP ───────────────────────────────────────────────────
 async function VF_request(endpoint, method, body) {
-  const base  = window.location.href.split('/fakenews-detector/')[0] + '/fakenews-detector/backend/core';
+  // URL dinâmico: funciona em localhost e produção
+  const _href = window.location.href;
+  const _base = _href.includes('/fakenews-detector/')
+    ? _href.split('/fakenews-detector/')[0] + '/fakenews-detector/backend/core'
+    : window.location.origin + '/fakenews-detector/backend/core';
+  const base = _base;
   const token = localStorage.getItem('vf_token');
   const opts  = {
     method:  method || 'GET',
@@ -300,6 +305,10 @@ function VF_initProfile() {
       user = { ...user, ...fresh.data };
       VF_setUser(user, localStorage.getItem('vf_token'));
       fillProfile(user);
+
+  // Mostrar botão admin só se for admin
+  const adminWrap = document.getElementById('adminBtnWrap');
+  if (adminWrap && user.role === 'admin') adminWrap.style.display = 'block';
     }
   }).catch(() => {});
 
@@ -436,12 +445,16 @@ document.addEventListener('DOMContentLoaded', () => {
 // ============================================================
 // ── Google Login ─────────────────────────────────────────────
 // ============================================================
-async function handleGoogleLogin(response) {
+// Bridge para o callback do Google (definido antes do GSI carregar)
+window._handleGoogleLogin = async function(response) {
   const idToken = response.credential;
   if (!idToken) { VF_toast('Erro ao obter token Google.', 'error'); return; }
 
   try {
-    const base = window.location.href.split('/fakenews-detector/')[0] + '/fakenews-detector/backend/core';
+    const _h = window.location.href;
+    const base = _h.includes('/fakenews-detector/')
+      ? _h.split('/fakenews-detector/')[0] + '/fakenews-detector/backend/core'
+      : window.location.origin + '/fakenews-detector/backend/core';
     const res  = await fetch(base + '/auth.php?action=googleLogin', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -475,3 +488,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 });
+
+// Se Google respondeu antes do auth.js carregar
+if (window._pendingGoogleResponse) {
+  window._handleGoogleLogin(window._pendingGoogleResponse);
+  window._pendingGoogleResponse = null;
+}

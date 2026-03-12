@@ -4,10 +4,22 @@
 //  Ficheiro: backend/config/helpers.php
 // ============================================================
 
+// Capturar erros e devolver como JSON em vez de HTML
+set_error_handler(function($errno, $errstr, $errfile, $errline) {
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['success' => false, 'error' => "PHP Error [$errno]: $errstr in $errfile:$errline"]);
+    exit();
+});
+set_exception_handler(function($e) {
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['success' => false, 'error' => 'Exception: ' . $e->getMessage()]);
+    exit();
+});
+
 require_once __DIR__ . '/db.php';
 
 // --- CORS ---
-function setCORSHeaders(): void {
+function setCORSHeaders() {
     $origin = $_SERVER['HTTP_ORIGIN'] ?? '*';
     if (in_array('*', ALLOWED_ORIGINS) || in_array($origin, ALLOWED_ORIGINS)) {
         header('Access-Control-Allow-Origin: ' . $origin);
@@ -24,20 +36,20 @@ function setCORSHeaders(): void {
 }
 
 // --- JSON responses ---
-function jsonSuccess(mixed $data = null, int $code = 200): never {
+function jsonSuccess($data = null, int $code = 200): never {
     http_response_code($code);
     echo json_encode(['success' => true, 'data' => $data], JSON_UNESCAPED_UNICODE);
     exit();
 }
 
-function jsonError(string $message, int $code = 400): never {
+function jsonError($message, int $code = 400): never {
     http_response_code($code);
     echo json_encode(['success' => false, 'error' => $message], JSON_UNESCAPED_UNICODE);
     exit();
 }
 
 // --- Input ---
-function getJsonBody(): array {
+function getJsonBody() {
     $raw = file_get_contents('php://input');
     return json_decode($raw, true) ?? [];
 }
@@ -51,7 +63,7 @@ function base64UrlDecode(string $data): string {
     return base64_decode(strtr($data, '-_', '+/') . str_repeat('=', 3 - (3 + strlen($data)) % 4));
 }
 
-function createJWT(array $payload): string {
+function createJWT($payload): string {
     $header  = base64UrlEncode(json_encode(['alg' => 'HS256', 'typ' => 'JWT']));
     $payload['iat'] = time();
     $payload['exp'] = time() + JWT_EXPIRE_HOURS * 3600;
@@ -60,7 +72,7 @@ function createJWT(array $payload): string {
     return "$header.$body.$sig";
 }
 
-function verifyJWT(string $token): ?array {
+function verifyJWT($token): ?array {
     $parts = explode('.', $token);
     if (count($parts) !== 3) return null;
     [$header, $body, $sig] = $parts;
@@ -71,7 +83,7 @@ function verifyJWT(string $token): ?array {
     return $payload;
 }
 
-function getAuthUser(): ?array {
+function getAuthUser() {
     // XAMPP/Apache às vezes não passa HTTP_AUTHORIZATION — usar múltiplos fallbacks
     $authHeader = $_SERVER['HTTP_AUTHORIZATION']
                ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION']
@@ -104,7 +116,7 @@ function getAuthUser(): ?array {
     return $stmt->fetch() ?: null;
 }
 
-function requireAuth(): array {
+function requireAuth() {
     $user = getAuthUser();
     if (!$user) jsonError('Não autenticado. Faz login primeiro.', 401);
     return $user;

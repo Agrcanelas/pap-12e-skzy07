@@ -1,10 +1,10 @@
 <?php
 // ── Base de Dados ─────────────────────────────────────────
-define('DB_HOST',    'sql110.infinityfree.com');
+define('DB_HOST',    'localhost');
 define('DB_PORT',    '3306');
-define('DB_NAME',    'f0_41355675_verifact');
-define('DB_USER',    'if0_41355675');
-define('DB_PASS',    'Pro352503');
+define('DB_NAME',    'verifact');
+define('DB_USER',    'root');
+define('DB_PASS',    '');
 define('DB_CHARSET', 'utf8mb4');
 
 // ── JWT ───────────────────────────────────────────────────
