@@ -1,12 +1,12 @@
 // ============================================================
-//  scan.js — VeriFact: Google Fact Check API + Groq AI
+//  scan.js — VeriFact: Google Fact Check API + Gemini AI
 // ============================================================
 
-const GROQ_API_KEY  = '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';
-const GROQ_URL      = 'https://api.groq.com/openai/v1/chat/completions';
-const GROQ_MODEL    = 'llama-3.3-70b-versatile';
-const FACTCHECK_KEY = 'AIzaSyCUQZ5pI7bhQL8dwIxgPD8KfofnbF6ZNLc';
-const FACTCHECK_URL = 'https://factchecktools.googleapis.com/v1alpha1/claims:search';
+const GEMINI_API_KEY = 'AIzaSyAbMJvMkyz7TPv-NyihN9CiN9mD-g_2Dh4';
+const GEMINI_MODEL   = 'gemini-2.0-flash';
+const GEMINI_URL     = 'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent';
+const FACTCHECK_KEY  = 'AIzaSyCUQZ5pI7bhQL8dwIxgPD8KfofnbF6ZNLc';
+const FACTCHECK_URL  = 'https://factchecktools.googleapis.com/v1alpha1/claims:search';
 
 let currentMode = 'text';
 let lastResult  = null;
@@ -109,6 +109,28 @@ async function fetchUrlContent(url) {
   throw new Error('Não foi possível obter o conteúdo do URL. Tenta colar o texto diretamente.');
 }
 
+// ── HELPER: Chamar Gemini ──────────────────────────────────
+async function callGemini(prompt, maxTokens) {
+  const r = await fetch(GEMINI_URL + '?key=' + GEMINI_API_KEY, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        maxOutputTokens: maxTokens || 600,
+        temperature: 0.1,
+      }
+    })
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    throw new Error('Gemini API erro (' + r.status + '): ' + (err?.error?.message || r.statusText));
+  }
+  const data = await r.json();
+  if (data.error) throw new Error('Gemini: ' + data.error.message);
+  return (data.candidates?.[0]?.content?.parts?.[0]?.text || '').replace(/```json|```/g, '').trim();
+}
+
 // ── PASSO 1: Validar se é notícia ─────────────────────────
 async function validateIsNews(text) {
   const prompt = `Analisa este texto e responde APENAS com JSON válido sem markdown.
@@ -122,17 +144,10 @@ Responde:
 NÃO é notícia se: é ficção óbvia, poesia, código, receita, texto sem sentido ("aaa","hello","teste"), pergunta genérica sem afirmação.`;
 
   try {
-    const r = await fetch(GROQ_URL, {
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+GROQ_API_KEY},
-      body: JSON.stringify({ model:GROQ_MODEL, max_tokens:120, temperature:0,
-        messages:[{role:'user',content:prompt}] })
-    });
-    const data = await r.json();
-    const raw  = (data.choices?.[0]?.message?.content||'{}').replace(/```json|```/g,'').trim();
+    const raw = await callGemini(prompt, 150);
     return JSON.parse(raw);
   } catch {
-    return { is_news:true, reason:'Validação indisponível', topic:'', language:'pt' };
+    return { is_news: true, reason: 'Validação indisponível', topic: '', language: 'pt' };
   }
 }
 
@@ -161,10 +176,10 @@ async function searchFactCheck(query) {
   } catch { return []; }
 }
 
-// ── PASSO 3: Groq análise final ───────────────────────────
-async function analyzeWithGroq(text, factChecks) {
+// ── PASSO 3: Gemini análise final ─────────────────────────
+async function analyzeWithGemini(text, factChecks) {
   const fcContext = factChecks.length > 0
-    ? '\n\nVERIFICAÇÕES REAIS ENCONTRADAS:\n' + factChecks.map((f,i)=>
+    ? '\n\nVERIFICAÇÕES REAIS ENCONTRADAS:\n' + factChecks.map((f,i) =>
         '['+(i+1)+'] "'+f.text.slice(0,150)+'"\n  Veredicto: '+f.rating+' | Fonte: '+f.publisher).join('\n')
     : '\n\nNota: Não há verificações anteriores desta notícia em bases de dados de fact-checking.';
 
@@ -181,26 +196,17 @@ REGRAS:
 
 {"verdict":"fake"/"real"/"suspicious","reliability":0-100,"confidence":0-100,"summary":"análise em 2-3 frases em português","what_is_true":"o que é verdade ou vazio","verdict_reason":"razão em 1 frase","indicators":["indicador1","indicador2","indicador3"]}`;
 
-  const r = await fetch(GROQ_URL, {
-    method:'POST',
-    headers:{'Content-Type':'application/json','Authorization':'Bearer '+GROQ_API_KEY},
-    body: JSON.stringify({ model:GROQ_MODEL, max_tokens:600, temperature:0.1,
-      messages:[{role:'user',content:prompt}] })
-  });
-  if (!r.ok) throw new Error('Erro Groq ('+r.status+'). Verifica a chave API.');
-  const data = await r.json();
-  if (data.error) throw new Error('Groq: '+data.error.message);
-  const raw = (data.choices?.[0]?.message?.content||'{}').replace(/```json|```/g,'').trim();
+  const raw = await callGemini(prompt, 700);
   try {
     const p = JSON.parse(raw);
     return {
-      verdict:        ['fake','real','suspicious'].includes(p.verdict)?p.verdict:'suspicious',
-      reliability:    Math.min(99,Math.max(1,p.reliability||50)),
-      confidence:     Math.min(99,Math.max(20,p.confidence||50)),
-      summary:        p.summary||'Análise concluída.',
-      what_is_true:   p.what_is_true||'',
-      verdict_reason: p.verdict_reason||'',
-      indicators:     Array.isArray(p.indicators)?p.indicators:[],
+      verdict:        ['fake','real','suspicious'].includes(p.verdict) ? p.verdict : 'suspicious',
+      reliability:    Math.min(99, Math.max(1,  p.reliability || 50)),
+      confidence:     Math.min(99, Math.max(20, p.confidence  || 50)),
+      summary:        p.summary        || 'Análise concluída.',
+      what_is_true:   p.what_is_true   || '',
+      verdict_reason: p.verdict_reason || '',
+      indicators:     Array.isArray(p.indicators) ? p.indicators : [],
     };
   } catch { throw new Error('Resposta da IA inválida. Tenta novamente.'); }
 }
@@ -804,7 +810,7 @@ async function generatePDF() {
       'Obtencao e limpeza do texto ou URL fornecido pelo utilizador.',
       'Validacao por IA: verificacao se o conteudo e uma afirmacao factual verificavel.',
       'Pesquisa na Google Fact Check API: bases internacionais como Reuters, AFP, Politifact e Poligrafo.',
-      'Analise semantica profunda com Groq LLaMA 3.3 70B com contexto dos fact-checks encontrados.',
+      'Analise semantica profunda com Google Gemini 2.0 Flash com contexto dos fact-checks encontrados.',
       'Calculo do indice de fiabilidade combinando resultado da IA com fact-checks reais.',
     ];
 
@@ -959,10 +965,10 @@ async function runScan() {
       setProgress(55,'Nenhum registo encontrado — a analisar com IA');
     }
 
-    // PASSO 3 — Groq
+    // PASSO 3 — Gemini
     setStep(3,'active','A analisar com IA...');
-    setProgress(65,'Groq AI a processar...');
-    const aiResult = await analyzeWithGroq(analysisText, factChecks);
+    setProgress(65,'Gemini AI a processar...');
+    const aiResult = await analyzeWithGemini(analysisText, factChecks);
     setStep(3,'done','✓ Análise concluída');
     setProgress(80,'Análise completa');
 
