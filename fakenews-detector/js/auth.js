@@ -285,7 +285,6 @@ function VF_initProfile() {
   function fillProfile(u) {
     setVal('profName',  u.name);
     setVal('profEmail', u.email);
-    setVal('profBio',   u.bio || '');
     setText('profHeaderName',  u.name);
     setText('profHeaderEmail', u.email);
     const prev = document.getElementById('profAvatarPreview');
@@ -336,13 +335,12 @@ function VF_initProfile() {
   // Guardar perfil
   document.getElementById('profSaveBtn')?.addEventListener('click', async () => {
     const name   = (document.getElementById('profName')?.value || '').trim();
-    const bio    = (document.getElementById('profBio')?.value  || '').trim();
     const avatar = document.getElementById('profAvatarData')?.value || user.avatar || null;
     if (!name) { VF_toast('O nome não pode estar vazio.', 'error'); return; }
 
-    const res = await VF_request('auth.php?action=update', 'POST', { name, bio, avatar });
+    const res = await VF_request('auth.php?action=update', 'POST', { name, avatar });
     if (res.success) {
-      VF_setUser({ ...user, name, bio, avatar }, localStorage.getItem('vf_token'));
+      VF_setUser({ ...user, name, avatar }, localStorage.getItem('vf_token'));
       VF_toast('✓ Perfil atualizado!', 'success');
       setText('profHeaderName', name);
     } else {

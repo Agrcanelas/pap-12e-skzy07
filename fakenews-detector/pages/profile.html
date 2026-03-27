@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
-    .profile-page { max-width: 720px; margin: 0 auto; padding: 100px 24px 80px; }
+    .profile-page { max-width: 800px; margin: 0 auto; padding: 100px 24px 80px; }
     .profile-header { display:flex; align-items:center; gap:24px; margin-bottom:48px; flex-wrap:wrap; }
     .profile-avatar-wrap { position:relative; cursor:pointer; }
     .profile-avatar {
@@ -40,17 +40,16 @@
     }
     .form-row { display:flex; flex-direction:column; gap:6px; margin-bottom:20px; }
     .form-row label { font-size:12px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--text3); }
-    .form-row input, .form-row textarea {
+    .form-row input {
       background:var(--surface2); border:1px solid var(--border);
       border-radius:10px; padding:11px 14px; color:var(--text);
       font-family:var(--font-main); font-size:14px; transition:border-color 0.2s;
       width:100%;
     }
-    .form-row input:focus, .form-row textarea:focus {
+    .form-row input:focus {
       outline:none; border-color:var(--accent); background:var(--bg2);
     }
     .form-row input[disabled] { opacity:0.5; cursor:not-allowed; }
-    .form-row textarea { resize:vertical; min-height:80px; }
     .pw-error { font-size:12px; color:var(--red); min-height:16px; margin-top:4px; }
     .btn-save {
       background:var(--accent); color:#000; border:none; border-radius:10px;
@@ -80,6 +79,65 @@
     }
     .avatar-opt:hover, .avatar-opt.selected { border-color:var(--accent); transform:scale(1.1); }
     .section-divider { height:1px; background:var(--border); margin:8px 0 24px; }
+
+    /* ── Histórico integrado no perfil ── */
+    .history-tabs { display:flex; gap:8px; margin-bottom:24px; }
+    .hist-tab {
+      padding:8px 20px; border-radius:999px; font-size:13px; font-weight:600;
+      border:1px solid var(--border); background:transparent; color:var(--text2);
+      cursor:pointer; transition:all 0.2s; font-family:var(--font-main);
+    }
+    .hist-tab.active { background:var(--accent); color:#000; border-color:var(--accent); }
+
+    .scan-list-inline { display:flex; flex-direction:column; gap:10px; }
+    .scan-row-inline {
+      background:var(--surface2); border:1px solid var(--border);
+      border-radius:12px; padding:14px 18px;
+      display:grid; grid-template-columns:auto 1fr auto;
+      align-items:center; gap:14px; transition:all 0.2s;
+    }
+    .scan-row-inline:hover { border-color:var(--border2); transform:translateX(3px); }
+    .scan-verdict-dot { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; }
+    .scan-verdict-dot.fake { background:rgba(255,51,102,0.15); }
+    .scan-verdict-dot.real { background:rgba(0,245,160,0.15); }
+    .scan-verdict-dot.suspicious { background:rgba(255,215,0,0.15); }
+    .scan-preview { font-size:13px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .scan-meta-row { font-size:11px; color:var(--text3); font-family:var(--font-mono); margin-top:3px; }
+    .scan-del-btn {
+      background:transparent; border:1px solid transparent; color:var(--text3);
+      padding:5px 10px; border-radius:8px; font-size:12px; cursor:pointer;
+      font-family:var(--font-main); transition:all 0.2s; white-space:nowrap;
+    }
+    .scan-del-btn:hover { border-color:var(--red); color:var(--red); }
+
+    .hist-empty { text-align:center; padding:40px 24px; color:var(--text3); }
+    .hist-empty .icon { font-size:48px; margin-bottom:12px; display:block; }
+    .hist-empty h3 { font-size:16px; font-weight:700; color:var(--text2); margin-bottom:6px; }
+    .hist-loading { text-align:center; padding:40px; color:var(--text3); font-size:14px; }
+
+    .hist-pagination { display:flex; justify-content:center; gap:8px; margin-top:20px; }
+    .hist-page-btn {
+      padding:6px 14px; border-radius:8px; border:1px solid var(--border);
+      background:var(--surface2); color:var(--text2); cursor:pointer;
+      font-family:var(--font-main); font-size:13px; transition:all 0.2s;
+    }
+    .hist-page-btn:hover, .hist-page-btn.active { border-color:var(--accent); color:var(--accent); background:rgba(0,245,160,0.05); }
+
+    .stats-mini {
+      display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:12px;
+      margin-bottom:24px;
+    }
+    .stat-mini-card {
+      background:var(--surface2); border-radius:12px; padding:14px;
+      text-align:center;
+    }
+    .stat-mini-num { font-family:var(--font-display); font-size:28px; letter-spacing:1px; }
+    .stat-mini-lbl { font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:1px; margin-top:2px; }
+
+    @media(max-width:600px){
+      .scan-row-inline { grid-template-columns:auto 1fr; gap:10px; }
+      .scan-del-btn { grid-column:1/-1; }
+    }
   </style>
 </head>
 <body>
@@ -162,10 +220,6 @@
         <label>Email</label>
         <input type="email" id="profEmail" disabled/>
       </div>
-      <div class="form-row">
-        <label>Biografia (opcional)</label>
-        <textarea id="profBio" placeholder="Escreve algo sobre ti..."></textarea>
-      </div>
       <button class="btn-save" id="profSaveBtn">💾 Guardar Alterações</button>
     </div>
 
@@ -188,28 +242,63 @@
       <button class="btn-secondary" id="profPwBtn" style="width:100%">🔑 Alterar Palavra-passe</button>
     </div>
 
-    <!-- ESTATÍSTICAS -->
+    <!-- HISTÓRICO INTEGRADO -->
     <div class="profile-card">
-      <h2>📊 As Minhas Estatísticas</h2>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:16px" id="profStats">
-        <div style="text-align:center;padding:16px;background:var(--surface2);border-radius:12px">
-          <div style="font-family:var(--font-display);font-size:32px;color:var(--accent2)" id="statTotal">0</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:4px">Verificações</div>
+      <h2>📂 Histórico</h2>
+
+      <!-- Mini estatísticas -->
+      <div class="stats-mini" id="histStatsRow">
+        <div class="stat-mini-card">
+          <div class="stat-mini-num" style="color:var(--accent2)" id="hStatTotal">—</div>
+          <div class="stat-mini-lbl">Total</div>
         </div>
-        <div style="text-align:center;padding:16px;background:var(--surface2);border-radius:12px">
-          <div style="font-family:var(--font-display);font-size:32px;color:var(--red)" id="statFake">0</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:4px">Falsas</div>
+        <div class="stat-mini-card">
+          <div class="stat-mini-num" style="color:var(--red)" id="hStatFake">—</div>
+          <div class="stat-mini-lbl">Falsas</div>
         </div>
-        <div style="text-align:center;padding:16px;background:var(--surface2);border-radius:12px">
-          <div style="font-family:var(--font-display);font-size:32px;color:var(--green)" id="statReal">0</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:4px">Verdadeiras</div>
+        <div class="stat-mini-card">
+          <div class="stat-mini-num" style="color:var(--yellow)" id="hStatSusp">—</div>
+          <div class="stat-mini-lbl">Suspeitas</div>
         </div>
-        <div style="text-align:center;padding:16px;background:var(--surface2);border-radius:12px">
-          <div style="font-family:var(--font-display);font-size:32px;color:var(--yellow)" id="statSusp">0</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:4px">Suspeitas</div>
+        <div class="stat-mini-card">
+          <div class="stat-mini-num" style="color:var(--green)" id="hStatReal">—</div>
+          <div class="stat-mini-lbl">Verdadeiras</div>
+        </div>
+      </div>
+
+      <!-- Tabs verificações / relatórios -->
+      <div class="history-tabs">
+        <button class="hist-tab active" id="htabScans" onclick="histShowTab('scans')">🔍 Verificações</button>
+        <button class="hist-tab" id="htabReports" onclick="histShowTab('reports')">📄 Relatórios PDF</button>
+      </div>
+
+      <!-- Painel Verificações -->
+      <div id="hPanelScans">
+        <div class="hist-loading" id="hScansLoading">⏳ A carregar...</div>
+        <div class="scan-list-inline" id="hScanList" style="display:none"></div>
+        <div class="hist-empty" id="hScansEmpty" style="display:none">
+          <span class="icon">🔍</span>
+          <h3>Nenhuma verificação ainda</h3>
+          <p>Faz a tua primeira verificação de notícias!</p>
+          <br/><a href="scan.html" class="btn-primary" style="display:inline-block;margin-top:8px">Verificar agora</a>
+        </div>
+        <div class="hist-pagination" id="hScansPag"></div>
+      </div>
+
+      <!-- Painel Relatórios -->
+      <div id="hPanelReports" style="display:none">
+        <div class="hist-loading" id="hReportsLoading">⏳ A carregar...</div>
+        <div class="scan-list-inline" id="hReportList" style="display:none"></div>
+        <div class="hist-empty" id="hReportsEmpty" style="display:none">
+          <span class="icon">📄</span>
+          <h3>Nenhum relatório ainda</h3>
+          <p>Gera um relatório PDF após uma verificação.</p>
         </div>
       </div>
     </div>
+
+    <!-- ESTATÍSTICAS (mantida para compatibilidade interna) -->
+    <!-- removida da UI — os valores agora aparecem no bloco do histórico acima -->
 
     <!-- ZONA DE PERIGO -->
     <div class="profile-card" style="border-color:rgba(255,51,102,0.25)">
@@ -224,6 +313,131 @@
   <script src="../js/i18n.js?v=3"></script>
   <script src="../js/api.js?v=3"></script>
   <script src="../js/auth.js?v=3"></script>
+
+  <!-- Lógica do histórico integrado no perfil -->
+  <script>
+    const H_LIMIT = 8;
+    let hScansOffset = 0;
+    let hScansTotal  = 0;
+
+    function histShowTab(tab) {
+      document.getElementById('htabScans').classList.toggle('active', tab === 'scans');
+      document.getElementById('htabReports').classList.toggle('active', tab === 'reports');
+      document.getElementById('hPanelScans').style.display   = tab === 'scans'   ? '' : 'none';
+      document.getElementById('hPanelReports').style.display = tab === 'reports' ? '' : 'none';
+    }
+
+    function hVerdictIcon(v)  { return { fake:'❌', real:'✅', suspicious:'⚠️' }[v] || '❓'; }
+    function hVerdictLabel(v) { return { fake:'FALSO', real:'VERDADEIRO', suspicious:'SUSPEITO' }[v] || v; }
+    function hFmtDate(d)      { return new Date(d).toLocaleString('pt-PT',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
+
+    async function histLoadStats() {
+      const res = await Scans.stats();
+      if (res?.success) {
+        const d = res.data;
+        document.getElementById('hStatTotal').textContent = d.total           ?? 0;
+        document.getElementById('hStatFake').textContent  = d.fake_count      ?? 0;
+        document.getElementById('hStatSusp').textContent  = d.suspicious_count ?? 0;
+        document.getElementById('hStatReal').textContent  = d.real_count      ?? 0;
+      }
+    }
+
+    async function histLoadScans(offset = 0) {
+      document.getElementById('hScansLoading').style.display = '';
+      document.getElementById('hScanList').style.display     = 'none';
+      document.getElementById('hScansEmpty').style.display   = 'none';
+
+      const res = await Scans.history(H_LIMIT, offset);
+      document.getElementById('hScansLoading').style.display = 'none';
+
+      if (!res?.success) { VF_toast('Erro ao carregar verificações.', 'error'); return; }
+      const { scans, total } = res.data;
+      hScansTotal = total; hScansOffset = offset;
+
+      if (!scans.length) { document.getElementById('hScansEmpty').style.display = ''; return; }
+
+      const list = document.getElementById('hScanList');
+      list.innerHTML = scans.map(s => `
+        <div class="scan-row-inline">
+          <div class="scan-verdict-dot ${s.verdict}">${hVerdictIcon(s.verdict)}</div>
+          <div style="min-width:0">
+            <div class="scan-preview">${s.preview || s.input_content?.substring(0,120) || '(sem texto)'}</div>
+            <div class="scan-meta-row">
+              <span class="badge badge-${s.verdict==='fake'?'fake':s.verdict==='real'?'real':'suspicious'}">${hVerdictLabel(s.verdict)}</span>
+              &nbsp;·&nbsp; ${s.reliability}% fiável
+              &nbsp;·&nbsp; ${s.input_type==='url'?'🔗 URL':'📝 Texto'}
+              &nbsp;·&nbsp; ${hFmtDate(s.created_at)}
+            </div>
+          </div>
+          <button class="scan-del-btn" onclick="histDeleteScan(${s.id}, this)">🗑 Apagar</button>
+        </div>`).join('');
+      list.style.display = 'flex';
+      histRenderPag(total, offset);
+    }
+
+    async function histDeleteScan(id, btn) {
+      if (!confirm('Apagar esta verificação?')) return;
+      btn.disabled = true;
+      const res = await Scans.delete(id);
+      if (res?.success) { VF_toast('Verificação apagada.', 'success'); histLoadScans(hScansOffset); histLoadStats(); }
+      else { VF_toast(res?.error || 'Erro ao apagar.', 'error'); btn.disabled = false; }
+    }
+
+    function histRenderPag(total, offset) {
+      const pages   = Math.ceil(total / H_LIMIT);
+      const current = Math.floor(offset / H_LIMIT);
+      const pag     = document.getElementById('hScansPag');
+      if (pages <= 1) { pag.innerHTML = ''; return; }
+      pag.innerHTML = Array.from({length: pages}, (_,i) =>
+        `<button class="hist-page-btn ${i===current?'active':''}" onclick="histLoadScans(${i*H_LIMIT})">${i+1}</button>`
+      ).join('');
+    }
+
+    async function histLoadReports() {
+      document.getElementById('hReportsLoading').style.display = '';
+      document.getElementById('hReportList').style.display     = 'none';
+      document.getElementById('hReportsEmpty').style.display   = 'none';
+
+      const res = await Reports.list(20, 0);
+      document.getElementById('hReportsLoading').style.display = 'none';
+
+      if (!res?.success) { document.getElementById('hReportsEmpty').style.display = ''; return; }
+      const { reports } = res.data;
+      if (!reports?.length) { document.getElementById('hReportsEmpty').style.display = ''; return; }
+
+      const list = document.getElementById('hReportList');
+      list.innerHTML = reports.map(r => `
+        <div class="scan-row-inline">
+          <div class="scan-verdict-dot ${r.verdict}">📄</div>
+          <div style="min-width:0">
+            <div class="scan-preview">${r.filename}</div>
+            <div class="scan-meta-row">
+              <span class="badge badge-${r.verdict==='fake'?'fake':r.verdict==='real'?'real':'suspicious'}">${hVerdictLabel(r.verdict)}</span>
+              &nbsp;·&nbsp; ${r.file_size_kb||'?'} KB &nbsp;·&nbsp; ${r.download_count} downloads
+              &nbsp;·&nbsp; ${hFmtDate(r.generated_at)}
+            </div>
+          </div>
+          <button class="scan-del-btn" onclick="histDeleteReport(${r.id},this)">🗑 Apagar</button>
+        </div>`).join('');
+      list.style.display = 'flex';
+    }
+
+    async function histDeleteReport(id, btn) {
+      if (!confirm('Apagar este relatório?')) return;
+      btn.disabled = true;
+      const res = await Reports.delete(id);
+      if (res?.success) { VF_toast('Relatório apagado.', 'success'); histLoadReports(); }
+      else { VF_toast(res?.error||'Erro.','error'); btn.disabled=false; }
+    }
+
+    // Inicializar histórico quando a página carregar
+    document.addEventListener('DOMContentLoaded', () => {
+      if (!VF_isLoggedIn()) return; // auth.js já redireciona
+      histLoadStats();
+      histLoadScans(0);
+      histLoadReports();
+    });
+  </script>
 
 </html>
   <footer class="footer">
