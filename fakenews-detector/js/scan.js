@@ -133,20 +133,29 @@ async function callGemini(prompt, maxTokens) {
 
 // ── PASSO 1: Validar se é notícia ─────────────────────────
 async function validateIsNews(text) {
-  const prompt = `Analisa este texto e responde APENAS com JSON válido sem markdown.
+  const prompt = `Analyze the following text and respond ONLY with valid JSON, no markdown, no explanation.
 
-Texto: "${text.slice(0,500)}"
+Text: "${text.slice(0, 400)}"
 
-Responde:
-{"is_news":true ou false,"reason":"motivo em 1 frase","topic":"tema em 3 palavras","language":"pt/en/outro"}
+Return this exact JSON structure:
+{"is_news":true,"reason":"short reason","topic":"3 word topic","language":"pt"}
 
-É notícia/afirmação factual se: descreve evento real ou alegado, contém afirmação verificável, parece titular ou post sobre algo acontecido.
-NÃO é notícia se: é ficção óbvia, poesia, código, receita, texto sem sentido ("aaa","hello","teste"), pergunta genérica sem afirmação.`;
+Rules:
+- Set is_news to false ONLY if the text is: obvious fiction, poetry, source code, recipe, or completely nonsensical (like "aaa", "test123").
+- Set is_news to true for: news headlines, political claims, scientific claims, social media posts about events, any verifiable statement.
+- When in doubt, set is_news to true.`;
 
   try {
-    const raw = await callGemini(prompt, 150);
-    return JSON.parse(raw);
+    const raw = await callGemini(prompt, 200);
+    // Extrair primeiro bloco JSON da resposta (mesmo que venha com texto à volta)
+    const jsonMatch = raw.match(/\{[\s\S]*?\}/);
+    const parsed    = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
+    // Normalizar is_news — pode vir como boolean, string "true"/"false", ou número
+    const rawVal = parsed.is_news ?? parsed.isNews ?? true;
+    const isNews = rawVal === true || rawVal === 'true' || rawVal === 1;
+    return { is_news: isNews, reason: parsed.reason || '', topic: parsed.topic || '', language: parsed.language || 'pt' };
   } catch {
+    // Em caso de qualquer erro, assume que é notícia para não bloquear análises legítimas
     return { is_news: true, reason: 'Validação indisponível', topic: '', language: 'pt' };
   }
 }
